@@ -1,7 +1,36 @@
-import React, {useMemo} from 'react';
-import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import type {LanguageCode} from '../utils/wayfinder';
+import {
+  Camera,
+  GeoJSONSource,
+  Images,
+  Layer,
+  Map,
+  RasterSource,
+  type CameraRef,
+} from '@maplibre/maplibre-react-native';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {Alert, StyleSheet, Text, View} from 'react-native';
+import {OWN_POSITION} from '../constants/symbology';
+import {PIN_IMAGE_MANIFEST} from '../constants/pinImages';
 import {t} from '../i18n/strings';
+import {ownPositionFeature, pinsFeatureCollection} from '../utils/geo';
+import {requestLocationPermission} from '../utils/permissions';
+import {
+  Wayfinder,
+  messageFrom,
+  type GpsPosition,
+  type LanguageCode,
+  type MapPin,
+  type MbtilesMetadata,
+} from '../utils/wayfinder';
+import PinDropSheet from './PinDropSheet';
+import RecenterButton from './RecenterButton';
+
+const EMPTY_MAP_STYLE = {
+  version: 8 as const,
+  name: 'wayfinder-empty',
+  sources: {},
+  layers: [] as [],
+};
 
 type Props = {
   dark: boolean;
@@ -12,21 +41,260 @@ type Props = {
 
 export default function MapScreen({dark, language, activeTilePath, onOpenSettings}: Props) {
   const styles = useMemo(() => makeStyles(dark), [dark]);
+  const cameraRef = useRef<CameraRef | null>(null);
+  const hasAutoCenteredRef = useRef(false);
+  const [tileMeta, setTileMeta] = useState<MbtilesMetadata | null>(null);
+  const [position, setPosition] = useState<GpsPosition | null>(null);
+  const [pins, setPins] = useState<MapPin[]>([]);
+  const [loadingTiles, setLoadingTiles] = useState(true);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+  const [dropCoordinate, setDropCoordinate] = useState<{latitude: number; longitude: number} | null>(
+    null,
+  );
+  const [dropVisible, setDropVisible] = useState(false);
+  const [savingPin, setSavingPin] = useState(false);
+
+  const loadPins = useCallback(async () => {
+    const saved = await Wayfinder.listPins();
+    setPins(saved);
+  }, []);
+
+  useEffect(() => {
+    loadPins().catch(() => undefined);
+  }, [loadPins]);
+
+  useEffect(() => {
+    async function loadTiles() {
+      if (!activeTilePath) {
+        setTileMeta(null);
+        setLoadingTiles(false);
+        return;
+      }
+      setLoadingTiles(true);
+      try {
+        const metadata = await Wayfinder.getMbtilesMetadata(activeTilePath);
+        setTileMeta(metadata);
+      } catch (error) {
+        setTileMeta(null);
+        Alert.alert(t(language, 'noTilesTitle'), messageFrom(error));
+      } finally {
+        setLoadingTiles(false);
+      }
+    }
+
+    loadTiles().catch(() => undefined);
+  }, [activeTilePath, language]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let interval: ReturnType<typeof setInterval> | undefined;
+
+    async function startGps() {
+      const granted = await requestLocationPermission();
+      if (!granted) {
+        setGpsError(t(language, 'gpsPermissionDenied'));
+        return;
+      }
+
+      async function refreshPosition() {
+        try {
+          const next = await Wayfinder.getCurrentLocation();
+          if (!cancelled) {
+            setPosition(next);
+            setGpsError(null);
+          }
+        } catch (error) {
+          if (!cancelled) {
+            setGpsError(messageFrom(error));
+          }
+        }
+      }
+
+      await refreshPosition();
+      interval = setInterval(() => {
+        refreshPosition().catch(() => undefined);
+      }, 3000);
+    }
+
+    startGps().catch(error => setGpsError(messageFrom(error)));
+
+    return () => {
+      cancelled = true;
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [language]);
+
+  const initialCenter = useMemo<[number, number]>(() => {
+    if (position) {
+      return [position.longitude, position.latitude];
+    }
+    if (tileMeta?.centerLng != null && tileMeta.centerLat != null) {
+      return [tileMeta.centerLng, tileMeta.centerLat];
+    }
+    return [18.5582, 4.3947];
+  }, [position, tileMeta]);
+
+  const initialZoom = tileMeta?.centerZoom ?? 12;
+
+  useEffect(() => {
+    if (!position || !cameraRef.current || hasAutoCenteredRef.current) {
+      return;
+    }
+    hasAutoCenteredRef.current = true;
+    cameraRef.current.easeTo({
+      center: [position.longitude, position.latitude],
+      zoom: initialZoom,
+      duration: 0,
+    });
+  }, [position, initialZoom]);
+
+  function recenterOnOwnPosition() {
+    if (!position || !cameraRef.current) {
+      return;
+    }
+    cameraRef.current.easeTo({
+      center: [position.longitude, position.latitude],
+      zoom: Math.max(initialZoom, 14),
+      duration: 500,
+    });
+  }
+
+  async function saveDroppedPin(payload: {
+    category: string;
+    status_key: string;
+    label: string;
+    latitude: number;
+    longitude: number;
+  }) {
+    setSavingPin(true);
+    try {
+      await Wayfinder.savePin({
+        id: '',
+        category: payload.category,
+        status_key: payload.status_key,
+        label: payload.label,
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+      });
+      await loadPins();
+      setDropVisible(false);
+      setDropCoordinate(null);
+    } catch (error) {
+      Alert.alert(t(language, 'dropPinTitle'), messageFrom(error));
+    } finally {
+      setSavingPin(false);
+    }
+  }
+
+  const ownPositionGeoJson = useMemo(() => {
+    if (!position) {
+      return {type: 'FeatureCollection' as const, features: []};
+    }
+    return {
+      type: 'FeatureCollection' as const,
+      features: [ownPositionFeature(position.latitude, position.longitude)],
+    };
+  }, [position]);
+
+  const pinsGeoJson = useMemo(() => pinsFeatureCollection(pins), [pins]);
+
+  if (!activeTilePath || !tileMeta) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.messageBox}>
+          <Text style={styles.title}>{t(language, 'noTilesTitle')}</Text>
+          <Text style={styles.body}>{t(language, 'noTilesBody')}</Text>
+          <Text style={styles.settingsLink} onPress={onOpenSettings}>
+            {t(language, 'openSettings')}
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <View style={styles.placeholder}>
-        <Text style={styles.title}>{t(language, 'mapPlaceholderTitle')}</Text>
-        <Text style={styles.body}>{t(language, 'mapPlaceholderBody')}</Text>
-        {activeTilePath ? (
-          <Text style={styles.path} numberOfLines={2}>
-            {activeTilePath}
-          </Text>
-        ) : null}
+      <Map
+        style={styles.map}
+        mapStyle={EMPTY_MAP_STYLE}
+        onPress={event => {
+          const [longitude, latitude] = event.nativeEvent.lngLat;
+          setDropCoordinate({latitude, longitude});
+          setDropVisible(true);
+        }}>
+        <Camera
+          ref={cameraRef}
+          initialViewState={{
+            center: initialCenter,
+            zoom: initialZoom,
+          }}
+        />
+        <Images images={PIN_IMAGE_MANIFEST} />
+        <RasterSource
+          id="deployment-tiles"
+          tiles={[tileMeta.mbtilesUrl]}
+          tileSize={tileMeta.tileSize}
+          scheme="tms"
+          minzoom={tileMeta.minZoom}
+          maxzoom={tileMeta.maxZoom}>
+          <Layer id="deployment-tiles-layer" type="raster" source="deployment-tiles" />
+        </RasterSource>
+        <GeoJSONSource id="own-position" data={ownPositionGeoJson}>
+          <Layer
+            id="own-position-layer"
+            type="circle"
+            source="own-position"
+            paint={{
+              'circle-radius': OWN_POSITION.radius,
+              'circle-color': OWN_POSITION.color,
+              'circle-stroke-color': OWN_POSITION.strokeColor,
+              'circle-stroke-width': OWN_POSITION.strokeWidth,
+            }}
+          />
+        </GeoJSONSource>
+        <GeoJSONSource id="pins" data={pinsGeoJson}>
+          <Layer
+            id="pins-layer"
+            type="symbol"
+            source="pins"
+            layout={{
+              'icon-image': ['get', 'icon'],
+              'icon-anchor': 'bottom',
+              'icon-allow-overlap': true,
+              'icon-ignore-placement': true,
+            }}
+          />
+        </GeoJSONSource>
+      </Map>
+
+      <View style={styles.overlayTop}>
+        {gpsError ? <Text style={styles.gpsBanner}>{gpsError}</Text> : null}
+        {loadingTiles ? <Text style={styles.gpsBanner}>{t(language, 'loadingTiles')}</Text> : null}
       </View>
-      <TouchableOpacity style={styles.settingsButton} onPress={onOpenSettings} activeOpacity={0.86}>
-        <Text style={styles.settingsText}>{t(language, 'settings')}</Text>
-      </TouchableOpacity>
+
+      <View style={styles.overlayBottom}>
+        <RecenterButton
+          dark={dark}
+          language={language}
+          onPress={recenterOnOwnPosition}
+          disabled={!position}
+        />
+      </View>
+
+      <PinDropSheet
+        visible={dropVisible}
+        dark={dark}
+        language={language}
+        coordinate={dropCoordinate}
+        saving={savingPin}
+        onCancel={() => {
+          setDropVisible(false);
+          setDropCoordinate(null);
+        }}
+        onSave={saveDroppedPin}
+      />
     </View>
   );
 }
@@ -37,36 +305,35 @@ function makeStyles(dark: boolean) {
     surface: dark ? '#14161b' : '#ffffff',
     text: dark ? '#f4f5f7' : '#15171c',
     muted: dark ? '#a3a8b0' : '#606672',
-    border: dark ? '#30333b' : '#c9cdd3',
-    accent: dark ? '#2563eb' : '#1d4ed8',
+    danger: dark ? '#ff6b66' : '#b42318',
   };
 
   return StyleSheet.create({
     container: {flex: 1, backgroundColor: colors.background},
-    placeholder: {
+    map: {flex: 1},
+    overlayTop: {position: 'absolute', top: 12, left: 12, right: 12, gap: 6},
+    overlayBottom: {position: 'absolute', bottom: 18, right: 18},
+    gpsBanner: {
+      color: colors.danger,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 8,
+      fontSize: 14,
+      fontWeight: '700',
+      overflow: 'hidden',
+    },
+    messageBox: {
       flex: 1,
       margin: 18,
       borderRadius: 8,
-      borderWidth: 1,
-      borderColor: colors.border,
       backgroundColor: colors.surface,
       justifyContent: 'center',
       padding: 20,
       gap: 10,
     },
-    title: {color: colors.text, fontSize: 24, fontWeight: '900'},
+    title: {color: colors.text, fontSize: 22, fontWeight: '900'},
     body: {color: colors.text, fontSize: 17, lineHeight: 26},
-    path: {color: colors.muted, fontSize: 13, lineHeight: 20},
-    settingsButton: {
-      margin: 18,
-      marginTop: 0,
-      minHeight: 56,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: colors.accent,
-      justifyContent: 'center',
-      paddingHorizontal: 16,
-    },
-    settingsText: {color: colors.accent, fontSize: 18, fontWeight: '800', textAlign: 'center'},
+    settingsLink: {color: '#2563eb', fontSize: 17, fontWeight: '800', marginTop: 8},
   });
 }

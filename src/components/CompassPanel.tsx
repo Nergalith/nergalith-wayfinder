@@ -1,2 +1,2 @@
-// Phase 2: digital compass panel (magnetometer + bearing/distance to selected pin).
+// Phase 3: digital compass panel (magnetometer + bearing/distance to selected pin).
 export {};

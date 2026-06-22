@@ -14,8 +14,6 @@ type StringKey =
   | 'pinMismatch'
   | 'pinWrong'
   | 'startupError'
-  | 'mapPlaceholderTitle'
-  | 'mapPlaceholderBody'
   | 'settings'
   | 'settingsTitle'
   | 'themeDark'
@@ -32,13 +30,27 @@ type StringKey =
   | 'pinConfigured'
   | 'pinNotConfigured'
   | 'back'
-  | 'offlineOnly';
+  | 'offlineOnly'
+  | 'recenter'
+  | 'dropPinTitle'
+  | 'selectCategory'
+  | 'selectStatus'
+  | 'pinLabel'
+  | 'pinLabelPlaceholder'
+  | 'placePin'
+  | 'savingPin'
+  | 'cancel'
+  | 'noTilesTitle'
+  | 'noTilesBody'
+  | 'openSettings'
+  | 'gpsPermissionDenied'
+  | 'loadingTiles';
 
 const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
   fr: {
     appTitle: 'Nergalith Wayfinder',
     appSubtitle: 'Positionnement et navigation',
-    versionLabel: 'Wayfinder v0.1.0',
+    versionLabel: 'Wayfinder v0.2.0',
     pinCreateTitle: 'Créer un code PIN à 4 chiffres',
     pinUnlockTitle: 'Entrez le code PIN',
     pinPlaceholder: 'PIN',
@@ -49,8 +61,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     pinMismatch: 'La confirmation du PIN ne correspond pas.',
     pinWrong: 'Code PIN incorrect.',
     startupError: 'Erreur au démarrage',
-    mapPlaceholderTitle: 'Carte',
-    mapPlaceholderBody: 'La couche carte MapLibre arrive en Phase 2. Le module natif et le PIN sont prêts.',
     settings: 'Paramètres',
     settingsTitle: 'Paramètres',
     themeDark: 'Sombre',
@@ -61,18 +71,32 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     languageEn: 'Anglais',
     tilesLabel: 'Paquet de tuiles MBTiles',
     tilesDemoLoaded: 'Tuiles de démo Bangui (CAR) chargées pour les tests.',
-    tilesSideloadHint: 'Pour un déploiement réel, chargez un fichier .mbtiles via les paramètres (Phase 2).',
+    tilesSideloadHint: 'Pour un déploiement réel, chargez un fichier .mbtiles via les paramètres.',
     tilesActivePath: 'Fichier actif',
     pinManagement: 'Gestion du PIN',
     pinConfigured: 'PIN configuré sur cet appareil.',
     pinNotConfigured: 'Aucun PIN configuré.',
     back: 'Retour',
     offlineOnly: 'Hors ligne uniquement — aucun compte ni cloud.',
+    recenter: 'Recentrer',
+    dropPinTitle: 'Placer un repère',
+    selectCategory: 'Catégorie',
+    selectStatus: 'Statut',
+    pinLabel: 'Étiquette (optionnel)',
+    pinLabelPlaceholder: 'Courte description',
+    placePin: 'Placer le repère',
+    savingPin: 'Enregistrement...',
+    cancel: 'Annuler',
+    noTilesTitle: 'Aucune carte chargée',
+    noTilesBody: 'Chargez un paquet MBTiles pour afficher la carte hors ligne.',
+    openSettings: 'Ouvrir les paramètres',
+    gpsPermissionDenied: 'Autorisation GPS refusée.',
+    loadingTiles: 'Chargement des tuiles...',
   },
   en: {
     appTitle: 'Nergalith Wayfinder',
     appSubtitle: 'Positioning and navigation',
-    versionLabel: 'Wayfinder v0.1.0',
+    versionLabel: 'Wayfinder v0.2.0',
     pinCreateTitle: 'Create a 4-digit PIN',
     pinUnlockTitle: 'Enter PIN to unlock',
     pinPlaceholder: 'PIN',
@@ -83,8 +107,6 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     pinMismatch: 'PIN confirmation did not match.',
     pinWrong: 'PIN did not match.',
     startupError: 'Startup error',
-    mapPlaceholderTitle: 'Map',
-    mapPlaceholderBody: 'MapLibre map layer arrives in Phase 2. Native module and PIN gate are ready.',
     settings: 'Settings',
     settingsTitle: 'Settings',
     themeDark: 'Dark',
@@ -95,13 +117,27 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     languageEn: 'English',
     tilesLabel: 'MBTiles package',
     tilesDemoLoaded: 'Demo Bangui (CAR) tiles loaded for testing.',
-    tilesSideloadHint: 'For real deployment, sideload a .mbtiles file via Settings (Phase 2).',
+    tilesSideloadHint: 'For real deployment, sideload a .mbtiles file via Settings.',
     tilesActivePath: 'Active file',
     pinManagement: 'PIN management',
     pinConfigured: 'PIN is configured on this device.',
     pinNotConfigured: 'No PIN configured.',
     back: 'Back',
     offlineOnly: 'Offline only — no account or cloud.',
+    recenter: 'Re-center',
+    dropPinTitle: 'Drop a pin',
+    selectCategory: 'Category',
+    selectStatus: 'Status',
+    pinLabel: 'Label (optional)',
+    pinLabelPlaceholder: 'Short description',
+    placePin: 'Place pin',
+    savingPin: 'Saving...',
+    cancel: 'Cancel',
+    noTilesTitle: 'No map loaded',
+    noTilesBody: 'Load an MBTiles package to display the offline map.',
+    openSettings: 'Open Settings',
+    gpsPermissionDenied: 'GPS permission denied.',
+    loadingTiles: 'Loading tiles...',
   },
 };
 
