@@ -193,6 +193,14 @@ function App(): React.JSX.Element {
             {screen === 'settings' ? t(language, 'settingsTitle') : t(language, 'appSubtitle')}
           </Text>
         </View>
+        <TouchableOpacity
+          style={styles.settingsButton}
+          onPress={() => setScreen(screen === 'settings' ? 'map' : 'settings')}
+          activeOpacity={0.86}>
+          <Text style={styles.settingsButtonText}>
+            {screen === 'settings' ? t(language, 'back') : t(language, 'settings')}
+          </Text>
+        </TouchableOpacity>
         <Text style={styles.versionText}>{t(language, 'versionLabel')}</Text>
       </View>
 
@@ -248,6 +256,16 @@ function makeStyles(dark: boolean) {
     titleBlock: {flex: 1},
     appTitle: {color: colors.text, fontSize: 24, fontWeight: '800'},
     subtitle: {color: colors.muted, fontSize: 15, marginTop: 2},
+    settingsButton: {
+      minHeight: 44,
+      paddingHorizontal: 12,
+      borderRadius: 6,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      justifyContent: 'center',
+    },
+    settingsButtonText: {color: colors.text, fontSize: 14, fontWeight: '800'},
     versionText: {color: colors.muted, fontSize: 14, fontWeight: '800'},
     pinScreen: {flex: 1, padding: 24, justifyContent: 'center', gap: 14},
     pinInput: {

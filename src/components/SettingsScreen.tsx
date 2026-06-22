@@ -1,7 +1,7 @@
-import React, {useMemo} from 'react';
-import {ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import type {LanguageCode, TilePackageInfo} from '../utils/wayfinder';
+import React, {useMemo, useState} from 'react';
+import {Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {t} from '../i18n/strings';
+import {Wayfinder, messageFrom, type LanguageCode, type TilePackageInfo} from '../utils/wayfinder';
 
 type Props = {
   dark: boolean;
@@ -26,6 +26,22 @@ export default function SettingsScreen({
 }: Props) {
   const styles = useMemo(() => makeStyles(dark), [dark]);
   const demoPackage = tilePackages.find(pkg => pkg.isDemo);
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const result = await Wayfinder.exportAar();
+      Alert.alert(
+        t(language, 'exportSuccess'),
+        `${result.jsonFilename}\n${result.kmlFilename}\n${result.pinCount} pins · ${result.trackPointCount} track points`,
+      );
+    } catch (error) {
+      Alert.alert(t(language, 'exportAar'), messageFrom(error));
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.screen}>
@@ -83,6 +99,18 @@ export default function SettingsScreen({
           </Text>
         ) : null}
       </View>
+
+      <Text style={styles.label}>{t(language, 'exportAar')}</Text>
+      <Text style={styles.infoText}>{t(language, 'exportHelp')}</Text>
+      <TouchableOpacity
+        style={[styles.exportButton, exporting && styles.exportButtonDisabled]}
+        onPress={handleExport}
+        disabled={exporting}
+        activeOpacity={0.86}>
+        <Text style={styles.exportButtonText}>
+          {exporting ? t(language, 'exportingAar') : t(language, 'exportAar')}
+        </Text>
+      </TouchableOpacity>
 
       <Text style={styles.label}>{t(language, 'pinManagement')}</Text>
       <Text style={styles.infoText}>
@@ -146,6 +174,16 @@ function makeStyles(dark: boolean) {
     infoText: {color: colors.text, fontSize: 16, lineHeight: 24},
     infoMuted: {color: colors.muted, fontSize: 15, lineHeight: 22},
     path: {color: colors.muted, fontSize: 13, lineHeight: 20},
+    exportButton: {
+      minHeight: 56,
+      borderRadius: 8,
+      backgroundColor: colors.accent,
+      justifyContent: 'center',
+      paddingHorizontal: 14,
+      marginTop: 8,
+    },
+    exportButtonDisabled: {opacity: 0.7},
+    exportButtonText: {color: colors.accentText, fontSize: 17, fontWeight: '800', textAlign: 'center'},
     footer: {color: colors.muted, fontSize: 15, lineHeight: 22, marginTop: 20},
   });
 }

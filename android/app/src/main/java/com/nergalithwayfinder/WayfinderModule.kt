@@ -1,15 +1,26 @@
 package com.nergalithwayfinder
 
 import android.Manifest
+import android.content.ContentResolver
+import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.provider.MediaStore
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -31,6 +42,11 @@ class WayfinderModule(private val context: ReactApplicationContext) :
     ReactContextBaseJavaModule(context) {
 
   private val dbHelper = WayfinderDatabase(context)
+  private val sensorManager =
+      context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+  private var compassListener: SensorEventListener? = null
+  private var compassActive = false
+  private var lastHeading: Float? = null
 
   override fun getName(): String = "WayfinderNative"
 
@@ -301,6 +317,201 @@ class WayfinderModule(private val context: ReactApplicationContext) :
   }
 
   @ReactMethod
+  fun startCompass(promise: Promise) {
+    try {
+      if (compassActive) {
+        promise.resolve(true)
+        return
+      }
+
+      val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+      if (sensor == null) {
+        promise.reject("COMPASS_UNAVAILABLE", "Device has no rotation vector sensor.")
+        return
+      }
+
+      compassListener =
+          object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+              val rotationMatrix = FloatArray(9)
+              val orientationAngles = FloatArray(3)
+              SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+              SensorManager.getOrientation(rotationMatrix, orientationAngles)
+              var azimuth = Math.toDegrees(orientationAngles[0].toDouble()).toFloat()
+              if (azimuth < 0) {
+                azimuth += 360f
+              }
+              lastHeading = azimuth
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+          }
+
+      sensorManager.registerListener(
+          compassListener,
+          sensor,
+          SensorManager.SENSOR_DELAY_UI,
+      )
+      compassActive = true
+      promise.resolve(true)
+    } catch (error: Exception) {
+      promise.reject("COMPASS_START_FAILED", error.message, error)
+    }
+  }
+
+  @ReactMethod
+  fun stopCompass(promise: Promise) {
+    try {
+      compassListener?.let { sensorManager.unregisterListener(it) }
+      compassListener = null
+      compassActive = false
+      lastHeading = null
+      promise.resolve(true)
+    } catch (error: Exception) {
+      promise.reject("COMPASS_STOP_FAILED", error.message, error)
+    }
+  }
+
+  @ReactMethod
+  fun getCompassHeading(promise: Promise) {
+    try {
+      val heading = lastHeading
+      if (heading == null) {
+        promise.reject("COMPASS_EMPTY", "Compass heading is not available yet.")
+        return
+      }
+      promise.resolve(
+          Arguments.createMap().apply {
+            putDouble("heading", heading.toDouble())
+            putString("cardinal", cardinalFromDegrees(heading))
+          })
+    } catch (error: Exception) {
+      promise.reject("COMPASS_READ_FAILED", error.message, error)
+    }
+  }
+
+  @ReactMethod
+  fun appendTrackPoint(latitude: Double, longitude: Double, promise: Promise) {
+    try {
+      val now = isoNow()
+      val id =
+          dbHelper.writableDatabase.insert(
+              "track_points",
+              null,
+              android.content.ContentValues().apply {
+                put("latitude", latitude)
+                put("longitude", longitude)
+                put("recorded_at", now)
+              },
+          )
+      promise.resolve(
+          Arguments.createMap().apply {
+            putDouble("id", id.toDouble())
+            putDouble("latitude", latitude)
+            putDouble("longitude", longitude)
+            putString("recorded_at", now)
+          })
+    } catch (error: Exception) {
+      promise.reject("TRACK_APPEND_FAILED", error.message, error)
+    }
+  }
+
+  @ReactMethod
+  fun listTrackPoints(promise: Promise) {
+    try {
+      val points = Arguments.createArray()
+      dbHelper.readableDatabase
+          .rawQuery("SELECT * FROM track_points ORDER BY id ASC", null)
+          .use { cursor ->
+            while (cursor.moveToNext()) {
+              points.pushMap(
+                  Arguments.createMap().apply {
+                    putDouble("id", cursor.getDouble(cursor.getColumnIndexOrThrow("id")))
+                    putDouble("latitude", cursor.getDouble(cursor.getColumnIndexOrThrow("latitude")))
+                    putDouble(
+                        "longitude", cursor.getDouble(cursor.getColumnIndexOrThrow("longitude")))
+                    putString(
+                        "recorded_at", cursor.getString(cursor.getColumnIndexOrThrow("recorded_at")))
+                  })
+            }
+          }
+      promise.resolve(points)
+    } catch (error: Exception) {
+      promise.reject("TRACK_LIST_FAILED", error.message, error)
+    }
+  }
+
+  @ReactMethod
+  fun clearTrackPoints(promise: Promise) {
+    try {
+      dbHelper.writableDatabase.delete("track_points", null, null)
+      promise.resolve(true)
+    } catch (error: Exception) {
+      promise.reject("TRACK_CLEAR_FAILED", error.message, error)
+    }
+  }
+
+  @ReactMethod
+  fun appendPinToRoute(pinId: String, promise: Promise) {
+    try {
+      val route = loadActiveRoute()
+      val pinIds = route.pinIds.toMutableList()
+      if (pinIds.isEmpty() || pinIds.last() != pinId) {
+        pinIds.add(pinId)
+      }
+      val saved = persistActiveRoute(route.name, pinIds)
+      promise.resolve(saved)
+    } catch (error: Exception) {
+      promise.reject("ROUTE_APPEND_FAILED", error.message, error)
+    }
+  }
+
+  @ReactMethod
+  fun getActiveRoute(promise: Promise) {
+    try {
+      promise.resolve(loadActiveRoute().toMap())
+    } catch (error: Exception) {
+      promise.reject("ROUTE_LOAD_FAILED", error.message, error)
+    }
+  }
+
+  @ReactMethod
+  fun clearRoute(promise: Promise) {
+    try {
+      dbHelper.writableDatabase.delete("routes", "id = ?", arrayOf(ACTIVE_ROUTE_ID))
+      promise.resolve(true)
+    } catch (error: Exception) {
+      promise.reject("ROUTE_CLEAR_FAILED", error.message, error)
+    }
+  }
+
+  @ReactMethod
+  fun exportAar(promise: Promise) {
+    try {
+      val exportId = "WF-${exportStamp()}"
+      val payload = buildAarPayload(exportId)
+      val jsonFilename = "$exportId.json"
+      val kmlFilename = "$exportId.kml"
+      val jsonResult = writePublicExportFile(jsonFilename, "application/json", payload.toString(2))
+      val kmlResult = writePublicExportFile(kmlFilename, "application/vnd.google-earth.kml+xml", buildKml(payload))
+      promise.resolve(
+          Arguments.createMap().apply {
+            putString("exportId", exportId)
+            putString("jsonFilename", jsonFilename)
+            putString("kmlFilename", kmlFilename)
+            putString("jsonPath", jsonResult.getString("path"))
+            putString("kmlPath", kmlResult.getString("path"))
+            putString("jsonUri", jsonResult.getString("uri"))
+            putString("kmlUri", kmlResult.getString("uri"))
+            putInt("pinCount", payload.getJSONArray("pins").length())
+            putInt("trackPointCount", payload.getJSONArray("track_points").length())
+          })
+    } catch (error: Exception) {
+      promise.reject("EXPORT_FAILED", error.message, error)
+    }
+  }
+
+  @ReactMethod
   fun listTilePackages(promise: Promise) {
     try {
       val packages = Arguments.createArray()
@@ -495,8 +706,284 @@ class WayfinderModule(private val context: ReactApplicationContext) :
     return formatter.format(Date())
   }
 
+  private fun exportStamp(): String {
+    val formatter = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
+    formatter.timeZone = TimeZone.getTimeZone("UTC")
+    return formatter.format(Date())
+  }
+
+  private fun cardinalFromDegrees(degrees: Float): String {
+    val normalized = ((degrees % 360f) + 360f) % 360f
+    val cards = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+    val index = ((normalized + 22.5f) / 45f).toInt() % 8
+    return cards[index]
+  }
+
+  private data class ActiveRoute(
+      val id: String,
+      val name: String,
+      val pinIds: List<String>,
+      val createdAt: String,
+  ) {
+    fun toMap() =
+        Arguments.createMap().apply {
+          putString("id", id)
+          putString("name", name)
+          putArray("pin_ids", Arguments.createArray().apply { pinIds.forEach { pushString(it) } })
+          putString("created_at", createdAt)
+        }
+  }
+
+  private fun loadActiveRoute(): ActiveRoute {
+    dbHelper.readableDatabase
+        .rawQuery("SELECT * FROM routes WHERE id = ? LIMIT 1", arrayOf(ACTIVE_ROUTE_ID))
+        .use { cursor ->
+          if (cursor.moveToFirst()) {
+            val pinIdsJson = cursor.getString(cursor.getColumnIndexOrThrow("pin_ids_json"))
+            val pinIds =
+                JSONArray(pinIdsJson).let { array ->
+                  buildList {
+                    for (index in 0 until array.length()) {
+                      add(array.optString(index))
+                    }
+                  }
+                }
+            return ActiveRoute(
+                id = ACTIVE_ROUTE_ID,
+                name = cursor.getString(cursor.getColumnIndexOrThrow("name")),
+                pinIds = pinIds,
+                createdAt = cursor.getString(cursor.getColumnIndexOrThrow("created_at")),
+            )
+          }
+        }
+    return ActiveRoute(ACTIVE_ROUTE_ID, "", emptyList(), "")
+  }
+
+  private fun persistActiveRoute(name: String, pinIds: List<String>): com.facebook.react.bridge.WritableMap {
+    val now = isoNow()
+    val values =
+        android.content.ContentValues().apply {
+          put("id", ACTIVE_ROUTE_ID)
+          put("name", name)
+          put("pin_ids_json", JSONArray(pinIds).toString())
+          put("created_at", now)
+        }
+    dbHelper.writableDatabase.insertWithOnConflict(
+        "routes",
+        null,
+        values,
+        SQLiteDatabase.CONFLICT_REPLACE,
+    )
+    return ActiveRoute(ACTIVE_ROUTE_ID, name, pinIds, now).toMap()
+  }
+
+  private fun buildAarPayload(exportId: String): JSONObject {
+    val pins = JSONArray()
+    dbHelper.readableDatabase
+        .rawQuery("SELECT * FROM pins ORDER BY created_at ASC", null)
+        .use { cursor ->
+          while (cursor.moveToNext()) {
+            pins.put(
+                JSONObject().apply {
+                  put("id", cursor.getString(cursor.getColumnIndexOrThrow("id")))
+                  put("category", cursor.getString(cursor.getColumnIndexOrThrow("category")))
+                  put("status_key", cursor.getString(cursor.getColumnIndexOrThrow("status_key")))
+                  put("label", cursor.getString(cursor.getColumnIndexOrThrow("label")))
+                  put("latitude", cursor.getDouble(cursor.getColumnIndexOrThrow("latitude")))
+                  put("longitude", cursor.getDouble(cursor.getColumnIndexOrThrow("longitude")))
+                  put("created_at", cursor.getString(cursor.getColumnIndexOrThrow("created_at")))
+                  put("updated_at", cursor.getString(cursor.getColumnIndexOrThrow("updated_at")))
+                })
+          }
+        }
+
+    val trackPoints = JSONArray()
+    dbHelper.readableDatabase
+        .rawQuery("SELECT * FROM track_points ORDER BY id ASC", null)
+        .use { cursor ->
+          while (cursor.moveToNext()) {
+            trackPoints.put(
+                JSONObject().apply {
+                  put("id", cursor.getDouble(cursor.getColumnIndexOrThrow("id")))
+                  put("latitude", cursor.getDouble(cursor.getColumnIndexOrThrow("latitude")))
+                  put("longitude", cursor.getDouble(cursor.getColumnIndexOrThrow("longitude")))
+                  put("recorded_at", cursor.getString(cursor.getColumnIndexOrThrow("recorded_at")))
+                })
+          }
+        }
+
+    val route = loadActiveRoute()
+    return JSONObject().apply {
+      put("export_id", exportId)
+      put("timestamp", isoNow())
+      put("export_format", "WAYFINDER")
+      put("schema_version", SCHEMA_VERSION)
+      put("app_version", APP_VERSION)
+      put("symbology_version", SYMBOLOGY_VERSION)
+      put("pins", pins)
+      put("track_points", trackPoints)
+      put(
+          "route",
+          JSONObject().apply {
+            put("id", route.id)
+            put("name", route.name)
+            put("pin_ids", JSONArray(route.pinIds))
+            put("created_at", route.createdAt)
+          })
+    }
+  }
+
+  private fun buildKml(payload: JSONObject): String {
+    val pins = payload.getJSONArray("pins")
+    val trackPoints = payload.getJSONArray("track_points")
+    val route = payload.optJSONObject("route") ?: JSONObject()
+    val routePinIds = route.optJSONArray("pin_ids") ?: JSONArray()
+
+    val pinById = mutableMapOf<String, JSONObject>()
+    for (index in 0 until pins.length()) {
+      val pin = pins.getJSONObject(index)
+      pinById[pin.getString("id")] = pin
+    }
+
+    val builder = StringBuilder()
+    builder.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+    builder.append("<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n")
+    builder.append("<Document>\n")
+    builder.append("<name>${escapeXml(payload.optString("export_id"))}</name>\n")
+    builder.append(
+        "<description>Wayfinder AAR export ${escapeXml(payload.optString("timestamp"))}</description>\n")
+
+    builder.append("<Folder><name>Pins</name>\n")
+    for (index in 0 until pins.length()) {
+      val pin = pins.getJSONObject(index)
+      builder.append("<Placemark>\n")
+      builder.append("<name>${escapeXml(pin.optString("label", pin.optString("category")))}</name>\n")
+      builder.append(
+          "<description>${escapeXml("${pin.optString("category")} / ${pin.optString("status_key")}")}</description>\n")
+      builder.append("<Point><coordinates>")
+      builder.append("${pin.getDouble("longitude")},${pin.getDouble("latitude")},0")
+      builder.append("</coordinates></Point>\n")
+      builder.append("</Placemark>\n")
+    }
+    builder.append("</Folder>\n")
+
+    if (trackPoints.length() > 1) {
+      builder.append("<Placemark><name>Movement Track</name><LineString><coordinates>\n")
+      for (index in 0 until trackPoints.length()) {
+        val point = trackPoints.getJSONObject(index)
+        builder.append("${point.getDouble("longitude")},${point.getDouble("latitude")},0\n")
+      }
+      builder.append("</coordinates></LineString></Placemark>\n")
+    }
+
+    if (routePinIds.length() > 1) {
+      builder.append("<Placemark><name>Route</name><LineString><coordinates>\n")
+      for (index in 0 until routePinIds.length()) {
+        val pin = pinById[routePinIds.optString(index)] ?: continue
+        builder.append("${pin.getDouble("longitude")},${pin.getDouble("latitude")},0\n")
+      }
+      builder.append("</coordinates></LineString></Placemark>\n")
+    }
+
+    builder.append("</Document>\n")
+    builder.append("</kml>\n")
+    return builder.toString()
+  }
+
+  private fun escapeXml(value: String): String =
+      value
+          .replace("&", "&amp;")
+          .replace("<", "&lt;")
+          .replace(">", "&gt;")
+          .replace("\"", "&quot;")
+          .replace("'", "&apos;")
+
+  private fun writePublicExportFile(
+      filename: String,
+      mimeType: String,
+      content: String,
+  ): com.facebook.react.bridge.WritableMap {
+    val relativeFolder = "${Environment.DIRECTORY_DOWNLOADS}/$EXPORT_FOLDER"
+    val publicPath =
+        "${Environment.getExternalStorageDirectory().absolutePath}/$relativeFolder/$filename"
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      val resolver = context.contentResolver
+      deleteExistingDownload(resolver, filename, relativeFolder)
+
+      val values =
+          ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, filename)
+            put(MediaStore.Downloads.MIME_TYPE, mimeType)
+            put(MediaStore.Downloads.RELATIVE_PATH, relativeFolder)
+            put(MediaStore.Downloads.IS_PENDING, 1)
+          }
+      val uri =
+          resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+              ?: throw IllegalStateException("Unable to create export file in Downloads.")
+
+      try {
+        resolver.openOutputStream(uri, "w").use { output ->
+          if (output == null) {
+            throw IllegalStateException("Unable to write export file.")
+          }
+          output.write(content.toByteArray(Charsets.UTF_8))
+        }
+        values.clear()
+        values.put(MediaStore.Downloads.IS_PENDING, 0)
+        resolver.update(uri, values, null, null)
+      } catch (error: Exception) {
+        resolver.delete(uri, null, null)
+        throw error
+      }
+
+      return Arguments.createMap().apply {
+        putString("filename", filename)
+        putString("path", publicPath)
+        putString("uri", uri.toString())
+      }
+    }
+
+    val exportDir =
+        File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), EXPORT_FOLDER)
+    exportDir.mkdirs()
+    val target = File(exportDir, filename)
+    if (target.exists()) {
+      target.delete()
+    }
+    target.writeText(content, Charsets.UTF_8)
+    return Arguments.createMap().apply {
+      putString("filename", filename)
+      putString("path", target.absolutePath)
+      putString("uri", Uri.fromFile(target).toString())
+    }
+  }
+
+  private fun deleteExistingDownload(
+      resolver: ContentResolver,
+      filename: String,
+      relativeFolder: String,
+  ) {
+    val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+    val selection =
+        "${MediaStore.Downloads.DISPLAY_NAME} = ? AND ${MediaStore.Downloads.RELATIVE_PATH} = ?"
+    val selectionArgs = arrayOf(filename, "$relativeFolder/")
+    resolver.query(collection, arrayOf(MediaStore.Downloads._ID), selection, selectionArgs, null)
+        ?.use { cursor ->
+          val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID)
+          while (cursor.moveToNext()) {
+            val itemUri = ContentUris.withAppendedId(collection, cursor.getLong(idColumn))
+            resolver.delete(itemUri, null, null)
+          }
+        }
+  }
+
   companion object {
-    private const val APP_VERSION = "0.2.0"
+    private const val APP_VERSION = "0.3.0"
+    private const val SCHEMA_VERSION = 1
+    private const val SYMBOLOGY_VERSION = "1.0"
+    private const val ACTIVE_ROUTE_ID = "active"
+    private const val EXPORT_FOLDER = "NergalithWayfinder"
     private const val PIN_HASH_KEY = "pin_hash_sha256"
     private const val THEME_MODE_KEY = "theme_mode"
     private const val LANGUAGE_KEY = "language"

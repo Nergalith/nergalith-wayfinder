@@ -44,13 +44,27 @@ type StringKey =
   | 'noTilesBody'
   | 'openSettings'
   | 'gpsPermissionDenied'
-  | 'loadingTiles';
+  | 'loadingTiles'
+  | 'compassHeading'
+  | 'compassCalibrating'
+  | 'compassToPin'
+  | 'longPressHint'
+  | 'addToRoute'
+  | 'clearSelection'
+  | 'deletePin'
+  | 'routeTitle'
+  | 'routeStops'
+  | 'clearRoute'
+  | 'exportAar'
+  | 'exportingAar'
+  | 'exportSuccess'
+  | 'exportHelp';
 
 const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
   fr: {
     appTitle: 'Nergalith Wayfinder',
     appSubtitle: 'Positionnement et navigation',
-    versionLabel: 'Wayfinder v0.2.0',
+    versionLabel: 'Wayfinder v0.3.0',
     pinCreateTitle: 'Créer un code PIN à 4 chiffres',
     pinUnlockTitle: 'Entrez le code PIN',
     pinPlaceholder: 'PIN',
@@ -92,11 +106,25 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     openSettings: 'Ouvrir les paramètres',
     gpsPermissionDenied: 'Autorisation GPS refusée.',
     loadingTiles: 'Chargement des tuiles...',
+    compassHeading: 'Cap',
+    compassCalibrating: 'Calibration boussole...',
+    compassToPin: 'Vers le repère',
+    longPressHint: 'Appui long sur la carte pour placer un repère',
+    addToRoute: 'Ajouter à l\'itinéraire',
+    clearSelection: 'Désélectionner',
+    deletePin: 'Supprimer le repère',
+    routeTitle: 'Itinéraire',
+    routeStops: '{count} étapes',
+    clearRoute: 'Effacer l\'itinéraire',
+    exportAar: 'Exporter AAR (JSON + KML)',
+    exportingAar: 'Export en cours...',
+    exportSuccess: 'Export enregistré dans Téléchargements/NergalithWayfinder',
+    exportHelp: 'Inclut tous les repères, la trace de mouvement et l\'itinéraire actif.',
   },
   en: {
     appTitle: 'Nergalith Wayfinder',
     appSubtitle: 'Positioning and navigation',
-    versionLabel: 'Wayfinder v0.2.0',
+    versionLabel: 'Wayfinder v0.3.0',
     pinCreateTitle: 'Create a 4-digit PIN',
     pinUnlockTitle: 'Enter PIN to unlock',
     pinPlaceholder: 'PIN',
@@ -138,6 +166,20 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     openSettings: 'Open Settings',
     gpsPermissionDenied: 'GPS permission denied.',
     loadingTiles: 'Loading tiles...',
+    compassHeading: 'Heading',
+    compassCalibrating: 'Calibrating compass...',
+    compassToPin: 'To pin',
+    longPressHint: 'Long-press the map to drop a pin',
+    addToRoute: 'Add to route',
+    clearSelection: 'Clear selection',
+    deletePin: 'Delete pin',
+    routeTitle: 'Route',
+    routeStops: '{count} stops',
+    clearRoute: 'Clear route',
+    exportAar: 'Export AAR (JSON + KML)',
+    exportingAar: 'Exporting...',
+    exportSuccess: 'Export saved to Downloads/NergalithWayfinder',
+    exportHelp: 'Includes all pins, movement track, and the active route.',
   },
 };
 

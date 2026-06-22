@@ -8,20 +8,29 @@ import {
   type CameraRef,
 } from '@maplibre/maplibre-react-native';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Alert, StyleSheet, Text, View} from 'react-native';
+import {Alert, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {OWN_POSITION} from '../constants/symbology';
 import {PIN_IMAGE_MANIFEST} from '../constants/pinImages';
+import {useMovementTrack} from '../hooks/useMovementTrack';
 import {t} from '../i18n/strings';
-import {ownPositionFeature, pinsFeatureCollection} from '../utils/geo';
+import {
+  ownPositionFeature,
+  pinsFeatureCollection,
+  routeLineFeature,
+  trackLineFeature,
+} from '../utils/geo';
 import {requestLocationPermission} from '../utils/permissions';
 import {
   Wayfinder,
   messageFrom,
+  type ActiveRoute,
   type GpsPosition,
   type LanguageCode,
   type MapPin,
   type MbtilesMetadata,
 } from '../utils/wayfinder';
+import CompassPanel from './CompassPanel';
+import PinActionSheet from './PinActionSheet';
 import PinDropSheet from './PinDropSheet';
 import RecenterButton from './RecenterButton';
 
@@ -31,6 +40,9 @@ const EMPTY_MAP_STYLE = {
   sources: {},
   layers: [] as [],
 };
+
+const TRACK_LINE_COLOR = '#60a5fa';
+const ROUTE_LINE_COLOR = '#f97316';
 
 type Props = {
   dark: boolean;
@@ -46,6 +58,13 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
   const [tileMeta, setTileMeta] = useState<MbtilesMetadata | null>(null);
   const [position, setPosition] = useState<GpsPosition | null>(null);
   const [pins, setPins] = useState<MapPin[]>([]);
+  const [activeRoute, setActiveRoute] = useState<ActiveRoute>({
+    id: 'active',
+    name: '',
+    pin_ids: [],
+    created_at: '',
+  });
+  const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   const [loadingTiles, setLoadingTiles] = useState(true);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [dropCoordinate, setDropCoordinate] = useState<{latitude: number; longitude: number} | null>(
@@ -54,14 +73,27 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
   const [dropVisible, setDropVisible] = useState(false);
   const [savingPin, setSavingPin] = useState(false);
 
+  const selectedPin = useMemo(
+    () => pins.find(pin => pin.id === selectedPinId) ?? null,
+    [pins, selectedPinId],
+  );
+
+  const {trackPoints} = useMovementTrack(position);
+
   const loadPins = useCallback(async () => {
     const saved = await Wayfinder.listPins();
     setPins(saved);
   }, []);
 
+  const loadRoute = useCallback(async () => {
+    const route = await Wayfinder.getActiveRoute();
+    setActiveRoute(route);
+  }, []);
+
   useEffect(() => {
     loadPins().catch(() => undefined);
-  }, [loadPins]);
+    loadRoute().catch(() => undefined);
+  }, [loadPins, loadRoute]);
 
   useEffect(() => {
     async function loadTiles() {
@@ -188,6 +220,44 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
     }
   }
 
+  async function handleAddToRoute() {
+    if (!selectedPinId) {
+      return;
+    }
+    try {
+      const route = await Wayfinder.appendPinToRoute(selectedPinId);
+      setActiveRoute(route);
+    } catch (error) {
+      Alert.alert(t(language, 'routeTitle'), messageFrom(error));
+    }
+  }
+
+  async function handleClearRoute() {
+    try {
+      await Wayfinder.clearRoute();
+      setActiveRoute({id: 'active', name: '', pin_ids: [], created_at: ''});
+    } catch (error) {
+      Alert.alert(t(language, 'routeTitle'), messageFrom(error));
+    }
+  }
+
+  async function handleDeletePin() {
+    if (!selectedPinId) {
+      return;
+    }
+    try {
+      await Wayfinder.deletePin(selectedPinId);
+      if (activeRoute.pin_ids.includes(selectedPinId)) {
+        await Wayfinder.clearRoute();
+        setActiveRoute({id: 'active', name: '', pin_ids: [], created_at: ''});
+      }
+      setSelectedPinId(null);
+      await loadPins();
+    } catch (error) {
+      Alert.alert(t(language, 'deletePin'), messageFrom(error));
+    }
+  }
+
   const ownPositionGeoJson = useMemo(() => {
     if (!position) {
       return {type: 'FeatureCollection' as const, features: []};
@@ -199,6 +269,22 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
   }, [position]);
 
   const pinsGeoJson = useMemo(() => pinsFeatureCollection(pins), [pins]);
+
+  const trackGeoJson = useMemo(() => {
+    const feature = trackLineFeature(trackPoints);
+    return {
+      type: 'FeatureCollection' as const,
+      features: feature ? [feature] : [],
+    };
+  }, [trackPoints]);
+
+  const routeGeoJson = useMemo(() => {
+    const feature = routeLineFeature(pins, activeRoute.pin_ids);
+    return {
+      type: 'FeatureCollection' as const,
+      features: feature ? [feature] : [],
+    };
+  }, [pins, activeRoute.pin_ids]);
 
   if (!activeTilePath || !tileMeta) {
     return (
@@ -219,10 +305,14 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
       <Map
         style={styles.map}
         mapStyle={EMPTY_MAP_STYLE}
-        onPress={event => {
+        onPress={() => {
+          setSelectedPinId(null);
+        }}
+        onLongPress={event => {
           const [longitude, latitude] = event.nativeEvent.lngLat;
           setDropCoordinate({latitude, longitude});
           setDropVisible(true);
+          setSelectedPinId(null);
         }}>
         <Camera
           ref={cameraRef}
@@ -241,6 +331,30 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
           maxzoom={tileMeta.maxZoom}>
           <Layer id="deployment-tiles-layer" type="raster" source="deployment-tiles" />
         </RasterSource>
+        <GeoJSONSource id="movement-track" data={trackGeoJson}>
+          <Layer
+            id="movement-track-layer"
+            type="line"
+            source="movement-track"
+            paint={{
+              'line-color': TRACK_LINE_COLOR,
+              'line-width': 3,
+              'line-opacity': 0.85,
+            }}
+          />
+        </GeoJSONSource>
+        <GeoJSONSource id="route-line" data={routeGeoJson}>
+          <Layer
+            id="route-line-layer"
+            type="line"
+            source="route-line"
+            paint={{
+              'line-color': ROUTE_LINE_COLOR,
+              'line-width': 4,
+              'line-opacity': 0.95,
+            }}
+          />
+        </GeoJSONSource>
         <GeoJSONSource id="own-position" data={ownPositionGeoJson}>
           <Layer
             id="own-position-layer"
@@ -254,7 +368,19 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
             }}
           />
         </GeoJSONSource>
-        <GeoJSONSource id="pins" data={pinsGeoJson}>
+        <GeoJSONSource
+          id="pins"
+          data={pinsGeoJson}
+          hitbox={{top: 24, bottom: 24, left: 24, right: 24}}
+          onPress={event => {
+            const feature = event.nativeEvent.features?.[0];
+            const pinId = feature?.properties?.id;
+            if (typeof pinId === 'string') {
+              setSelectedPinId(pinId);
+              setDropVisible(false);
+              setDropCoordinate(null);
+            }
+          }}>
           <Layer
             id="pins-layer"
             type="symbol"
@@ -272,14 +398,41 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
       <View style={styles.overlayTop}>
         {gpsError ? <Text style={styles.gpsBanner}>{gpsError}</Text> : null}
         {loadingTiles ? <Text style={styles.gpsBanner}>{t(language, 'loadingTiles')}</Text> : null}
+        <CompassPanel
+          dark={dark}
+          language={language}
+          position={position}
+          selectedPin={selectedPin}
+        />
+        <Text style={styles.hint}>{t(language, 'longPressHint')}</Text>
       </View>
 
-      <View style={styles.overlayBottom}>
+      <View style={[styles.overlayBottom, selectedPin ? styles.overlayBottomRaised : null]}>
+        {activeRoute.pin_ids.length > 0 ? (
+          <TouchableOpacity style={styles.routeChip} onPress={handleClearRoute} activeOpacity={0.86}>
+            <Text style={styles.routeChipText}>
+              {t(language, 'routeStops').replace('{count}', String(activeRoute.pin_ids.length))}
+            </Text>
+            <Text style={styles.routeChipAction}>{t(language, 'clearRoute')}</Text>
+          </TouchableOpacity>
+        ) : null}
         <RecenterButton
           dark={dark}
           language={language}
           onPress={recenterOnOwnPosition}
           disabled={!position}
+        />
+      </View>
+
+      <View style={styles.overlayActions}>
+        <PinActionSheet
+          dark={dark}
+          language={language}
+          pin={selectedPin}
+          routePinCount={activeRoute.pin_ids.length}
+          onAddToRoute={handleAddToRoute}
+          onClearSelection={() => setSelectedPinId(null)}
+          onDeletePin={handleDeletePin}
         />
       </View>
 
@@ -306,13 +459,28 @@ function makeStyles(dark: boolean) {
     text: dark ? '#f4f5f7' : '#15171c',
     muted: dark ? '#a3a8b0' : '#606672',
     danger: dark ? '#ff6b66' : '#b42318',
+    accent: dark ? '#f97316' : '#ea580c',
+    accentText: '#ffffff',
   };
 
   return StyleSheet.create({
     container: {flex: 1, backgroundColor: colors.background},
     map: {flex: 1},
-    overlayTop: {position: 'absolute', top: 12, left: 12, right: 12, gap: 6},
-    overlayBottom: {position: 'absolute', bottom: 18, right: 18},
+    overlayTop: {position: 'absolute', top: 12, left: 12, right: 12, gap: 8},
+    overlayBottom: {
+      position: 'absolute',
+      bottom: 18,
+      right: 18,
+      alignItems: 'flex-end',
+      gap: 10,
+    },
+    overlayBottomRaised: {bottom: 196},
+    overlayActions: {
+      position: 'absolute',
+      left: 12,
+      right: 12,
+      bottom: 18,
+    },
     gpsBanner: {
       color: colors.danger,
       backgroundColor: colors.surface,
@@ -323,6 +491,26 @@ function makeStyles(dark: boolean) {
       fontWeight: '700',
       overflow: 'hidden',
     },
+    hint: {
+      color: colors.muted,
+      backgroundColor: colors.surface,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 8,
+      fontSize: 13,
+      fontWeight: '700',
+      alignSelf: 'flex-start',
+    },
+    routeChip: {
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      gap: 2,
+      alignItems: 'flex-end',
+    },
+    routeChipText: {color: colors.text, fontSize: 14, fontWeight: '800'},
+    routeChipAction: {color: colors.accent, fontSize: 13, fontWeight: '800'},
     messageBox: {
       flex: 1,
       margin: 18,

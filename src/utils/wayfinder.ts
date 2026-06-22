@@ -43,6 +43,37 @@ export type MapPin = {
   updated_at: string;
 };
 
+export type CompassHeading = {
+  heading: number;
+  cardinal: string;
+};
+
+export type TrackPoint = {
+  id: number;
+  latitude: number;
+  longitude: number;
+  recorded_at: string;
+};
+
+export type ActiveRoute = {
+  id: string;
+  name: string;
+  pin_ids: string[];
+  created_at: string;
+};
+
+export type ExportResult = {
+  exportId: string;
+  jsonFilename: string;
+  kmlFilename: string;
+  jsonPath: string;
+  kmlPath: string;
+  jsonUri: string;
+  kmlUri: string;
+  pinCount: number;
+  trackPointCount: number;
+};
+
 export const Wayfinder = NativeModules.WayfinderNative as {
   initialize(): Promise<boolean>;
   getAppVersion(): Promise<string>;
@@ -61,6 +92,16 @@ export const Wayfinder = NativeModules.WayfinderNative as {
   savePin(pin: Omit<MapPin, 'created_at' | 'updated_at'> & Partial<Pick<MapPin, 'created_at' | 'updated_at'>>): Promise<MapPin>;
   listPins(): Promise<MapPin[]>;
   deletePin(pinId: string): Promise<boolean>;
+  startCompass(): Promise<boolean>;
+  stopCompass(): Promise<boolean>;
+  getCompassHeading(): Promise<CompassHeading>;
+  appendTrackPoint(latitude: number, longitude: number): Promise<TrackPoint>;
+  listTrackPoints(): Promise<TrackPoint[]>;
+  clearTrackPoints(): Promise<boolean>;
+  appendPinToRoute(pinId: string): Promise<ActiveRoute>;
+  getActiveRoute(): Promise<ActiveRoute>;
+  clearRoute(): Promise<boolean>;
+  exportAar(): Promise<ExportResult>;
 };
 
 export function messageFrom(error: unknown): string {
