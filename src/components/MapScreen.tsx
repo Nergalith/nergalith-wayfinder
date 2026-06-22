@@ -324,9 +324,9 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
         <Images images={PIN_IMAGE_MANIFEST} />
         <RasterSource
           id="deployment-tiles"
-          tiles={[tileMeta.mbtilesUrl]}
+          tiles={[tileMeta.tileUrlTemplate]}
           tileSize={tileMeta.tileSize}
-          scheme="tms"
+          scheme="xyz"
           minzoom={tileMeta.minZoom}
           maxzoom={tileMeta.maxZoom}>
           <Layer id="deployment-tiles-layer" type="raster" source="deployment-tiles" />

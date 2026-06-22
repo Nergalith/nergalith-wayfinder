@@ -88,7 +88,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
   fr: {
     appTitle: 'Nergalith Wayfinder',
     appSubtitle: 'Positionnement et navigation',
-    versionLabel: 'Wayfinder v0.4.4',
+    versionLabel: 'Wayfinder v0.4.5',
     pinCreateTitle: 'Créer un code PIN à 4 chiffres',
     pinUnlockTitle: 'Entrez le code PIN',
     pinPlaceholder: 'PIN',
@@ -172,7 +172,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
   en: {
     appTitle: 'Nergalith Wayfinder',
     appSubtitle: 'Positioning and navigation',
-    versionLabel: 'Wayfinder v0.4.4',
+    versionLabel: 'Wayfinder v0.4.5',
     pinCreateTitle: 'Create a 4-digit PIN',
     pinUnlockTitle: 'Enter PIN to unlock',
     pinPlaceholder: 'PIN',

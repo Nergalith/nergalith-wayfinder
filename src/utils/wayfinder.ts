@@ -13,6 +13,7 @@ export type TilePackageInfo = {
 export type MbtilesMetadata = {
   path: string;
   mbtilesUrl: string;
+  tileUrlTemplate: string;
   minZoom: number;
   maxZoom: number;
   tileSize: number;

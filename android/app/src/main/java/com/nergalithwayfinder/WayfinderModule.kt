@@ -300,9 +300,11 @@ class WayfinderModule(private val context: ReactApplicationContext) :
       }
 
       val metadata = readMbtilesMetadata(file)
+      val tileUrlTemplate = ensureExtractedTiles(file)
       val result = Arguments.createMap().apply {
         putString("path", file.absolutePath)
         putString("mbtilesUrl", toMbtilesUrl(file.absolutePath))
+        putString("tileUrlTemplate", tileUrlTemplate)
         putInt("minZoom", metadata.optInt("minzoom", 0))
         putInt("maxZoom", metadata.optInt("maxzoom", 22))
         putInt("tileSize", metadata.optInt("tileSize", 256))
@@ -699,6 +701,8 @@ class WayfinderModule(private val context: ReactApplicationContext) :
 
   private fun sideloadTilesDirectory(): File = File(tilesDirectory(), "sideload")
 
+  private fun tileCacheDirectory(): File = File(tilesDirectory(), "extracted")
+
   private fun copyMbtilesUriToSideload(uri: Uri): File {
     val originalName = displayNameForUri(uri) ?: "tiles-${System.currentTimeMillis()}.mbtiles"
     if (!originalName.endsWith(".mbtiles", ignoreCase = true)) {
@@ -851,6 +855,47 @@ class WayfinderModule(private val context: ReactApplicationContext) :
 
     return result
   }
+
+  private fun ensureExtractedTiles(file: File): String {
+    val outputDir = File(tileCacheDirectory(), safeCacheName(file))
+    val marker = File(outputDir, ".source")
+    val sourceSignature = "${file.absolutePath}|${file.length()}|${file.lastModified()}"
+    if (marker.exists() && marker.readText(Charsets.UTF_8) == sourceSignature) {
+      return tileTemplateFor(outputDir)
+    }
+
+    if (outputDir.exists()) {
+      outputDir.deleteRecursively()
+    }
+    outputDir.mkdirs()
+
+    SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY).use { db ->
+      db.rawQuery("SELECT zoom_level, tile_column, tile_row, tile_data FROM tiles", null).use { cursor ->
+        while (cursor.moveToNext()) {
+          val zoom = cursor.getInt(0)
+          val column = cursor.getInt(1)
+          val tmsRow = cursor.getInt(2)
+          val xyzRow = (1 shl zoom) - 1 - tmsRow
+          val tileData = cursor.getBlob(3)
+          val target = File(outputDir, "$zoom/$column/$xyzRow.png")
+          target.parentFile?.mkdirs()
+          FileOutputStream(target).use { output -> output.write(tileData) }
+        }
+      }
+    }
+
+    marker.writeText(sourceSignature, Charsets.UTF_8)
+    return tileTemplateFor(outputDir)
+  }
+
+  private fun tileTemplateFor(tileDir: File): String {
+    val normalized = tileDir.absolutePath.replace(File.separatorChar, '/')
+    val prefix = if (normalized.startsWith("/")) "file://" else "file:///"
+    return "$prefix$normalized/{z}/{x}/{y}.png"
+  }
+
+  private fun safeCacheName(file: File): String =
+      "${file.nameWithoutExtension}-${file.length()}".replace(Regex("[^A-Za-z0-9._-]"), "_")
 
   private fun toMbtilesUrl(path: String): String {
     val normalized = path.removePrefix("file://")
@@ -1172,7 +1217,7 @@ class WayfinderModule(private val context: ReactApplicationContext) :
   }
 
   companion object {
-    private const val APP_VERSION = "0.4.4"
+    private const val APP_VERSION = "0.4.5"
     private const val SCHEMA_VERSION = 1
     private const val SYMBOLOGY_VERSION = "1.0"
     private const val ACTIVE_ROUTE_ID = "active"
