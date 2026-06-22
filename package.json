@@ -1,6 +1,6 @@
 {
   "name": "NergalithWayfinder",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
@@ -9,6 +9,7 @@
     "start": "react-native start",
     "test": "jest",
     "generate-demo-tiles": "python scripts/generate_demo_mbtiles.py",
+    "generate-jacobabad-tiles": "python scripts/generate_jacobabad_mbtiles.py",
     "generate-pin-images": "node scripts/generate_pin_images.mjs"
   },
   "dependencies": {

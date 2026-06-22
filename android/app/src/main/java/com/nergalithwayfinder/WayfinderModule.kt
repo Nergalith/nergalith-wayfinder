@@ -108,7 +108,9 @@ class WayfinderModule(private val context: ReactApplicationContext) :
       ensureDeviceId()
       val demoPath = ensureDemoTilesInstalled()
       val activePath = settingsPrefs().getString(ACTIVE_MBTILES_PATH_KEY, null)
-      if (activePath.isNullOrBlank() && demoPath != null) {
+      val shouldUseBundledDemo =
+          activePath.isNullOrBlank() || File(activePath).name == LEGACY_BANGUI_MBTILES_FILENAME
+      if (shouldUseBundledDemo && demoPath != null) {
         settingsPrefs().edit().putString(ACTIVE_MBTILES_PATH_KEY, demoPath).apply()
       }
       promise.resolve(true)
@@ -636,8 +638,8 @@ class WayfinderModule(private val context: ReactApplicationContext) :
       if (demoFile.exists()) {
         packages.pushMap(
             tilePackageMap(
-                id = "demo_bangui",
-                name = "Demo Bangui (CAR)",
+                id = "demo_jacobabad",
+                name = "Demo Jacobabad (Pakistan)",
                 path = demoFile.absolutePath,
                 isDemo = true,
             ))
@@ -1170,7 +1172,7 @@ class WayfinderModule(private val context: ReactApplicationContext) :
   }
 
   companion object {
-    private const val APP_VERSION = "0.4.3"
+    private const val APP_VERSION = "0.4.4"
     private const val SCHEMA_VERSION = 1
     private const val SYMBOLOGY_VERSION = "1.0"
     private const val ACTIVE_ROUTE_ID = "active"
@@ -1180,7 +1182,8 @@ class WayfinderModule(private val context: ReactApplicationContext) :
     private const val LANGUAGE_KEY = "language"
     private const val ACTIVE_MBTILES_PATH_KEY = "active_mbtiles_path"
     private const val DEVICE_ID_KEY = "device_id"
-    private const val DEMO_MBTILES_FILENAME = "demo_bangui.mbtiles"
+    private const val LEGACY_BANGUI_MBTILES_FILENAME = "demo_bangui.mbtiles"
+    private const val DEMO_MBTILES_FILENAME = "demo_jacobabad.mbtiles"
     private const val IMPORT_MBTILES_REQUEST_CODE = 4104
     private const val LAST_KNOWN_LOCATION_MAX_AGE_MS = 5 * 60 * 1_000L
     private const val LIVE_LOCATION_TIMEOUT_MS = 12_000L
