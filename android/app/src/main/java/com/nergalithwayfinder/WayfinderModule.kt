@@ -431,6 +431,9 @@ class WayfinderModule(private val context: ReactApplicationContext) :
     try {
       val deleted =
           dbHelper.writableDatabase.delete("pins", "id = ?", arrayOf(pinId))
+      if (deleted > 0) {
+        removePinFromActiveRoute(pinId)
+      }
       promise.resolve(deleted > 0)
     } catch (error: Exception) {
       promise.reject("PIN_DELETE_FAILED", error.message, error)
@@ -1012,6 +1015,19 @@ class WayfinderModule(private val context: ReactApplicationContext) :
     return ActiveRoute(ACTIVE_ROUTE_ID, name, pinIds, now).toMap()
   }
 
+  private fun removePinFromActiveRoute(pinId: String) {
+    val route = loadActiveRoute()
+    if (!route.pinIds.contains(pinId)) {
+      return
+    }
+    val remainingPinIds = route.pinIds.filter { it != pinId }
+    if (remainingPinIds.isEmpty()) {
+      dbHelper.writableDatabase.delete("routes", "id = ?", arrayOf(ACTIVE_ROUTE_ID))
+    } else {
+      persistActiveRoute(route.name, remainingPinIds)
+    }
+  }
+
   private fun buildAarPayload(exportId: String): JSONObject {
     val pins = JSONArray()
     dbHelper.readableDatabase
@@ -1217,7 +1233,7 @@ class WayfinderModule(private val context: ReactApplicationContext) :
   }
 
   companion object {
-    private const val APP_VERSION = "0.4.5"
+    private const val APP_VERSION = "0.4.6"
     private const val SCHEMA_VERSION = 1
     private const val SYMBOLOGY_VERSION = "1.0"
     private const val ACTIVE_ROUTE_ID = "active"

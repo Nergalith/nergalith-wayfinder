@@ -245,14 +245,16 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
     if (!selectedPinId) {
       return;
     }
+    const deletedPinId = selectedPinId;
     try {
-      await Wayfinder.deletePin(selectedPinId);
-      if (activeRoute.pin_ids.includes(selectedPinId)) {
-        await Wayfinder.clearRoute();
-        setActiveRoute({id: 'active', name: '', pin_ids: [], created_at: ''});
-      }
+      await Wayfinder.deletePin(deletedPinId);
       setSelectedPinId(null);
-      await loadPins();
+      setPins(current => current.filter(pin => pin.id !== deletedPinId));
+      setActiveRoute(current => ({
+        ...current,
+        pin_ids: current.pin_ids.filter(pinId => pinId !== deletedPinId),
+      }));
+      await Promise.all([loadPins(), loadRoute()]);
     } catch (error) {
       Alert.alert(t(language, 'deletePin'), messageFrom(error));
     }
@@ -305,9 +307,6 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
       <Map
         style={styles.map}
         mapStyle={EMPTY_MAP_STYLE}
-        onPress={() => {
-          setSelectedPinId(null);
-        }}
         onLongPress={event => {
           const [longitude, latitude] = event.nativeEvent.lngLat;
           setDropCoordinate({latitude, longitude});
