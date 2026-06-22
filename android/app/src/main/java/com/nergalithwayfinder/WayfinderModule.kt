@@ -56,7 +56,7 @@ class WayfinderModule(private val context: ReactApplicationContext) :
   private val activityEventListener: ActivityEventListener =
       object : BaseActivityEventListener() {
         override fun onActivityResult(
-            activity: Activity?,
+            activity: Activity,
             requestCode: Int,
             resultCode: Int,
             data: Intent?,
@@ -257,7 +257,7 @@ class WayfinderModule(private val context: ReactApplicationContext) :
       return
     }
 
-    val activity = currentActivity
+    val activity = reactApplicationContext.currentActivity
     if (activity == null) {
       promise.reject("MBTILES_IMPORT_UNAVAILABLE", "No Android activity is available.")
       return
