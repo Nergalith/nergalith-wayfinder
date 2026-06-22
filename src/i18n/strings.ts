@@ -26,9 +26,29 @@ type StringKey =
   | 'tilesDemoLoaded'
   | 'tilesSideloadHint'
   | 'tilesActivePath'
+  | 'tilesSelectPackage'
+  | 'tilesActiveBadge'
+  | 'tilesSideloadFolder'
   | 'pinManagement'
   | 'pinConfigured'
   | 'pinNotConfigured'
+  | 'changePin'
+  | 'changePinTitle'
+  | 'currentPin'
+  | 'newPin'
+  | 'savePin'
+  | 'removePin'
+  | 'removePinConfirm'
+  | 'removePinConfirmBody'
+  | 'pinChanged'
+  | 'pinRemoved'
+  | 'deviceLabel'
+  | 'deviceHelp'
+  | 'aboutLabel'
+  | 'appearanceLabel'
+  | 'mapLabel'
+  | 'dataLabel'
+  | 'securityLabel'
   | 'back'
   | 'offlineOnly'
   | 'recenter'
@@ -64,7 +84,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
   fr: {
     appTitle: 'Nergalith Wayfinder',
     appSubtitle: 'Positionnement et navigation',
-    versionLabel: 'Wayfinder v0.3.0',
+    versionLabel: 'Wayfinder v0.4.0',
     pinCreateTitle: 'Créer un code PIN à 4 chiffres',
     pinUnlockTitle: 'Entrez le code PIN',
     pinPlaceholder: 'PIN',
@@ -85,11 +105,31 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     languageEn: 'Anglais',
     tilesLabel: 'Paquet de tuiles MBTiles',
     tilesDemoLoaded: 'Tuiles de démo Bangui (CAR) chargées pour les tests.',
-    tilesSideloadHint: 'Pour un déploiement réel, chargez un fichier .mbtiles via les paramètres.',
+    tilesSideloadHint: 'Pour un déploiement réel, copiez un fichier .mbtiles dans le dossier ci-dessous, puis sélectionnez-le.',
     tilesActivePath: 'Fichier actif',
+    tilesSelectPackage: 'Sélectionner le paquet actif',
+    tilesActiveBadge: 'Actif',
+    tilesSideloadFolder: 'Dossier de chargement manuel',
     pinManagement: 'Gestion du PIN',
     pinConfigured: 'PIN configuré sur cet appareil.',
     pinNotConfigured: 'Aucun PIN configuré.',
+    changePin: 'Changer le PIN',
+    changePinTitle: 'Modifier le code PIN',
+    currentPin: 'PIN actuel',
+    newPin: 'Nouveau PIN',
+    savePin: 'Enregistrer le PIN',
+    removePin: 'Supprimer le PIN',
+    removePinConfirm: 'Supprimer le PIN ?',
+    removePinConfirmBody: 'L\'application ne demandera plus de code PIN au démarrage.',
+    pinChanged: 'Code PIN mis à jour.',
+    pinRemoved: 'Code PIN supprimé.',
+    deviceLabel: 'Appareil',
+    deviceHelp: 'Identifiant stable pour attribuer les exports AAR à cet appareil.',
+    aboutLabel: 'À propos',
+    appearanceLabel: 'Apparence',
+    mapLabel: 'Carte',
+    dataLabel: 'Données',
+    securityLabel: 'Sécurité',
     back: 'Retour',
     offlineOnly: 'Hors ligne uniquement — aucun compte ni cloud.',
     recenter: 'Recentrer',
@@ -124,7 +164,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
   en: {
     appTitle: 'Nergalith Wayfinder',
     appSubtitle: 'Positioning and navigation',
-    versionLabel: 'Wayfinder v0.3.0',
+    versionLabel: 'Wayfinder v0.4.0',
     pinCreateTitle: 'Create a 4-digit PIN',
     pinUnlockTitle: 'Enter PIN to unlock',
     pinPlaceholder: 'PIN',
@@ -145,11 +185,31 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     languageEn: 'English',
     tilesLabel: 'MBTiles package',
     tilesDemoLoaded: 'Demo Bangui (CAR) tiles loaded for testing.',
-    tilesSideloadHint: 'For real deployment, sideload a .mbtiles file via Settings.',
+    tilesSideloadHint: 'For real deployment, copy a .mbtiles file into the folder below, then select it.',
     tilesActivePath: 'Active file',
+    tilesSelectPackage: 'Select active package',
+    tilesActiveBadge: 'Active',
+    tilesSideloadFolder: 'Sideload folder',
     pinManagement: 'PIN management',
     pinConfigured: 'PIN is configured on this device.',
     pinNotConfigured: 'No PIN configured.',
+    changePin: 'Change PIN',
+    changePinTitle: 'Change PIN code',
+    currentPin: 'Current PIN',
+    newPin: 'New PIN',
+    savePin: 'Save PIN',
+    removePin: 'Remove PIN',
+    removePinConfirm: 'Remove PIN?',
+    removePinConfirmBody: 'The app will no longer ask for a PIN on launch.',
+    pinChanged: 'PIN updated.',
+    pinRemoved: 'PIN removed.',
+    deviceLabel: 'Device',
+    deviceHelp: 'Stable identifier used to attribute AAR exports to this device.',
+    aboutLabel: 'About',
+    appearanceLabel: 'Appearance',
+    mapLabel: 'Map',
+    dataLabel: 'Data',
+    securityLabel: 'Security',
     back: 'Back',
     offlineOnly: 'Offline only — no account or cloud.',
     recenter: 'Re-center',

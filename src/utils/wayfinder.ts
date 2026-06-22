@@ -86,6 +86,9 @@ export const Wayfinder = NativeModules.WayfinderNative as {
   verifyPin(pin: string): Promise<boolean>;
   clearPin(): Promise<boolean>;
   getActiveMbtilesPath(): Promise<string | null>;
+  setActiveMbtilesPath(path: string): Promise<boolean>;
+  getSideloadTilesPath(): Promise<string>;
+  getDeviceId(): Promise<string>;
   getMbtilesMetadata(path: string): Promise<MbtilesMetadata>;
   getCurrentLocation(): Promise<GpsPosition>;
   listTilePackages(): Promise<TilePackageInfo[]>;

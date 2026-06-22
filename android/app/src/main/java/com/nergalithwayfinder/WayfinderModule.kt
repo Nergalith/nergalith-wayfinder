@@ -55,6 +55,7 @@ class WayfinderModule(private val context: ReactApplicationContext) :
     try {
       dbHelper.writableDatabase
       ensureDirectories()
+      ensureDeviceId()
       val demoPath = ensureDemoTilesInstalled()
       val activePath = settingsPrefs().getString(ACTIVE_MBTILES_PATH_KEY, null)
       if (activePath.isNullOrBlank() && demoPath != null) {
@@ -63,6 +64,15 @@ class WayfinderModule(private val context: ReactApplicationContext) :
       promise.resolve(true)
     } catch (error: Exception) {
       promise.reject("INIT_FAILED", error.message, error)
+    }
+  }
+
+  @ReactMethod
+  fun getDeviceId(promise: Promise) {
+    try {
+      promise.resolve(ensureDeviceId())
+    } catch (error: Exception) {
+      promise.reject("DEVICE_ID_FAILED", error.message, error)
     }
   }
 
@@ -168,6 +178,34 @@ class WayfinderModule(private val context: ReactApplicationContext) :
       promise.resolve(settingsPrefs().getString(ACTIVE_MBTILES_PATH_KEY, null))
     } catch (error: Exception) {
       promise.reject("MBTILES_PATH_FAILED", error.message, error)
+    }
+  }
+
+  @ReactMethod
+  fun setActiveMbtilesPath(path: String, promise: Promise) {
+    try {
+      val file = File(path)
+      if (!file.exists() || !file.isFile) {
+        promise.reject("MBTILES_MISSING", "MBTiles file not found.")
+        return
+      }
+      if (!file.name.endsWith(".mbtiles", ignoreCase = true)) {
+        promise.reject("MBTILES_INVALID", "Active tile package must be an .mbtiles file.")
+        return
+      }
+      settingsPrefs().edit().putString(ACTIVE_MBTILES_PATH_KEY, file.absolutePath).apply()
+      promise.resolve(true)
+    } catch (error: Exception) {
+      promise.reject("MBTILES_SET_FAILED", error.message, error)
+    }
+  }
+
+  @ReactMethod
+  fun getSideloadTilesPath(promise: Promise) {
+    try {
+      promise.resolve(sideloadTilesDirectory().absolutePath)
+    } catch (error: Exception) {
+      promise.reject("MBTILES_SIDELOAD_PATH_FAILED", error.message, error)
     }
   }
 
@@ -712,6 +750,28 @@ class WayfinderModule(private val context: ReactApplicationContext) :
     return formatter.format(Date())
   }
 
+  private fun ensureDeviceId(): String {
+    val prefs = settingsPrefs()
+    val existing = prefs.getString(DEVICE_ID_KEY, null)
+    if (!existing.isNullOrBlank()) {
+      return existing
+    }
+    val generated = UUID.randomUUID().toString()
+    prefs.edit().putString(DEVICE_ID_KEY, generated).apply()
+    return generated
+  }
+
+  /** Mirrors STATUS_COLORS hex values in src/constants/symbology.js */
+  private fun statusColorHex(statusKey: String): String =
+      when (statusKey) {
+        "hostile" -> "#dc2626"
+        "friendly" -> "#16a34a"
+        "unknown" -> "#eab308"
+        "neutral" -> "#2563eb"
+        "inactive" -> "#64748b"
+        else -> "#eab308"
+      }
+
   private fun cardinalFromDegrees(degrees: Float): String {
     val normalized = ((degrees % 360f) + 360f) % 360f
     val cards = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
@@ -787,7 +847,9 @@ class WayfinderModule(private val context: ReactApplicationContext) :
                 JSONObject().apply {
                   put("id", cursor.getString(cursor.getColumnIndexOrThrow("id")))
                   put("category", cursor.getString(cursor.getColumnIndexOrThrow("category")))
-                  put("status_key", cursor.getString(cursor.getColumnIndexOrThrow("status_key")))
+                  val statusKey = cursor.getString(cursor.getColumnIndexOrThrow("status_key"))
+                  put("status_key", statusKey)
+                  put("status_color", statusColorHex(statusKey))
                   put("label", cursor.getString(cursor.getColumnIndexOrThrow("label")))
                   put("latitude", cursor.getDouble(cursor.getColumnIndexOrThrow("latitude")))
                   put("longitude", cursor.getDouble(cursor.getColumnIndexOrThrow("longitude")))
@@ -815,6 +877,7 @@ class WayfinderModule(private val context: ReactApplicationContext) :
     val route = loadActiveRoute()
     return JSONObject().apply {
       put("export_id", exportId)
+      put("device_id", ensureDeviceId())
       put("timestamp", isoNow())
       put("export_format", "WAYFINDER")
       put("schema_version", SCHEMA_VERSION)
@@ -979,7 +1042,7 @@ class WayfinderModule(private val context: ReactApplicationContext) :
   }
 
   companion object {
-    private const val APP_VERSION = "0.3.0"
+    private const val APP_VERSION = "0.4.0"
     private const val SCHEMA_VERSION = 1
     private const val SYMBOLOGY_VERSION = "1.0"
     private const val ACTIVE_ROUTE_ID = "active"
@@ -988,6 +1051,7 @@ class WayfinderModule(private val context: ReactApplicationContext) :
     private const val THEME_MODE_KEY = "theme_mode"
     private const val LANGUAGE_KEY = "language"
     private const val ACTIVE_MBTILES_PATH_KEY = "active_mbtiles_path"
+    private const val DEVICE_ID_KEY = "device_id"
     private const val DEMO_MBTILES_FILENAME = "demo_bangui.mbtiles"
     private const val LAST_KNOWN_LOCATION_MAX_AGE_MS = 5 * 60 * 1_000L
     private const val LIVE_LOCATION_TIMEOUT_MS = 12_000L

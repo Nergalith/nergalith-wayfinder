@@ -126,6 +126,22 @@ function App(): React.JSX.Element {
     }
   }
 
+  async function selectTilePackage(path: string) {
+    await Wayfinder.setActiveMbtilesPath(path);
+    await refreshTileState();
+  }
+
+  function handlePinConfiguredChange(configured: boolean) {
+    setPinState(current => ({
+      ...current,
+      configured,
+      unlocked: true,
+      pin: '',
+      confirmPin: '',
+      error: '',
+    }));
+  }
+
   const theme = {
     background: dark ? '#090a0d' : '#f2f3f5',
     bar: dark ? '#111318' : '#ffffff',
@@ -222,6 +238,8 @@ function App(): React.JSX.Element {
           tilePackages={tilePackages}
           onThemeChange={setThemeMode}
           onLanguageChange={setAppLanguage}
+          onTilePackageChange={selectTilePackage}
+          onPinConfiguredChange={handlePinConfiguredChange}
           onBack={() => setScreen('map')}
         />
       ) : null}
