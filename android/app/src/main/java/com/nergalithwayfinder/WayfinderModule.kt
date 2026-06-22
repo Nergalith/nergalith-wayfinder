@@ -201,7 +201,7 @@ class WayfinderModule(private val context: ReactApplicationContext) :
   @ReactMethod
   fun getLanguage(promise: Promise) {
     try {
-      promise.resolve(settingsPrefs().getString(LANGUAGE_KEY, "fr"))
+      promise.resolve(settingsPrefs().getString(LANGUAGE_KEY, "en"))
     } catch (error: Exception) {
       promise.reject("LANGUAGE_LOAD_FAILED", error.message, error)
     }
@@ -1170,7 +1170,7 @@ class WayfinderModule(private val context: ReactApplicationContext) :
   }
 
   companion object {
-    private const val APP_VERSION = "0.4.2"
+    private const val APP_VERSION = "0.4.3"
     private const val SCHEMA_VERSION = 1
     private const val SYMBOLOGY_VERSION = "1.0"
     private const val ACTIVE_ROUTE_ID = "active"

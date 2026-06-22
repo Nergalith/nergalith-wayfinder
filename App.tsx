@@ -24,7 +24,7 @@ type Screen = 'map' | 'settings';
 
 function App(): React.JSX.Element {
   const [dark, setDark] = useState(true);
-  const [language, setLanguage] = useState<LanguageCode>('fr');
+  const [language, setLanguage] = useState<LanguageCode>('en');
   const [screen, setScreen] = useState<Screen>('map');
   const [activeTilePath, setActiveTilePath] = useState<string | null>(null);
   const [tilePackages, setTilePackages] = useState<TilePackageInfo[]>([]);
