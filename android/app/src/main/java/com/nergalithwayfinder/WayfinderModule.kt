@@ -1,13 +1,16 @@
 package com.nergalithwayfinder
 
 import android.Manifest
+import android.app.Activity
 import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.provider.OpenableColumns
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -22,7 +25,9 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.BaseActivityEventListener
 import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
@@ -47,6 +52,51 @@ class WayfinderModule(private val context: ReactApplicationContext) :
   private var compassListener: SensorEventListener? = null
   private var compassActive = false
   private var lastHeading: Float? = null
+  private var importMbtilesPromise: Promise? = null
+  private val activityEventListener: ActivityEventListener =
+      object : BaseActivityEventListener() {
+        override fun onActivityResult(
+            activity: Activity?,
+            requestCode: Int,
+            resultCode: Int,
+            data: Intent?,
+        ) {
+          if (requestCode != IMPORT_MBTILES_REQUEST_CODE) {
+            return
+          }
+
+          val promise = importMbtilesPromise ?: return
+          importMbtilesPromise = null
+
+          if (resultCode != Activity.RESULT_OK) {
+            promise.reject("MBTILES_IMPORT_CANCELLED", "MBTiles import was cancelled.")
+            return
+          }
+
+          val uri = data?.data
+          if (uri == null) {
+            promise.reject("MBTILES_IMPORT_EMPTY", "No MBTiles file was selected.")
+            return
+          }
+
+          try {
+            val copied = copyMbtilesUriToSideload(uri)
+            promise.resolve(
+                tilePackageMap(
+                    id = copied.nameWithoutExtension,
+                    name = copied.nameWithoutExtension,
+                    path = copied.absolutePath,
+                    isDemo = false,
+                ))
+          } catch (error: Exception) {
+            promise.reject("MBTILES_IMPORT_FAILED", error.message, error)
+          }
+        }
+      }
+
+  init {
+    context.addActivityEventListener(activityEventListener)
+  }
 
   override fun getName(): String = "WayfinderNative"
 
@@ -197,6 +247,35 @@ class WayfinderModule(private val context: ReactApplicationContext) :
       promise.resolve(true)
     } catch (error: Exception) {
       promise.reject("MBTILES_SET_FAILED", error.message, error)
+    }
+  }
+
+  @ReactMethod
+  fun importMbtilesPackage(promise: Promise) {
+    if (importMbtilesPromise != null) {
+      promise.reject("MBTILES_IMPORT_BUSY", "Another MBTiles import is already in progress.")
+      return
+    }
+
+    val activity = currentActivity
+    if (activity == null) {
+      promise.reject("MBTILES_IMPORT_UNAVAILABLE", "No Android activity is available.")
+      return
+    }
+
+    importMbtilesPromise = promise
+    val intent =
+        Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+          addCategory(Intent.CATEGORY_OPENABLE)
+          type = "*/*"
+          putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/octet-stream", "application/x-sqlite3"))
+        }
+
+    try {
+      activity.startActivityForResult(intent, IMPORT_MBTILES_REQUEST_CODE)
+    } catch (error: Exception) {
+      importMbtilesPromise = null
+      promise.reject("MBTILES_IMPORT_LAUNCH_FAILED", error.message, error)
     }
   }
 
@@ -617,6 +696,55 @@ class WayfinderModule(private val context: ReactApplicationContext) :
   private fun tilesDirectory(): File = File(context.filesDir, "tiles")
 
   private fun sideloadTilesDirectory(): File = File(tilesDirectory(), "sideload")
+
+  private fun copyMbtilesUriToSideload(uri: Uri): File {
+    val originalName = displayNameForUri(uri) ?: "tiles-${System.currentTimeMillis()}.mbtiles"
+    if (!originalName.endsWith(".mbtiles", ignoreCase = true)) {
+      throw IllegalArgumentException("Selected file must have a .mbtiles extension.")
+    }
+
+    val safeName = originalName.replace(Regex("[^A-Za-z0-9._-]"), "_")
+    val targetDir = sideloadTilesDirectory().apply { mkdirs() }
+    var target = File(targetDir, safeName)
+    if (target.exists()) {
+      val base = target.nameWithoutExtension
+      val extension = target.extension
+      target = File(targetDir, "$base-${System.currentTimeMillis()}.$extension")
+    }
+
+    context.contentResolver.openInputStream(uri).use { input ->
+      if (input == null) {
+        throw IllegalStateException("Unable to read selected MBTiles file.")
+      }
+      FileOutputStream(target).use { output -> input.copyTo(output) }
+    }
+
+    if (target.length() <= 0) {
+      target.delete()
+      throw IllegalStateException("Selected MBTiles file was empty.")
+    }
+
+    try {
+      readMbtilesMetadata(target)
+    } catch (error: Exception) {
+      target.delete()
+      throw error
+    }
+    return target
+  }
+
+  private fun displayNameForUri(uri: Uri): String? {
+    context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+        ?.use { cursor ->
+          if (cursor.moveToFirst()) {
+            val column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (column >= 0) {
+              return cursor.getString(column)
+            }
+          }
+        }
+    return uri.lastPathSegment?.substringAfterLast('/')
+  }
 
   private fun pinPrefs() = context.getSharedPreferences("wayfinder_security", Context.MODE_PRIVATE)
 
@@ -1042,7 +1170,7 @@ class WayfinderModule(private val context: ReactApplicationContext) :
   }
 
   companion object {
-    private const val APP_VERSION = "0.4.0"
+    private const val APP_VERSION = "0.4.1"
     private const val SCHEMA_VERSION = 1
     private const val SYMBOLOGY_VERSION = "1.0"
     private const val ACTIVE_ROUTE_ID = "active"
@@ -1053,6 +1181,7 @@ class WayfinderModule(private val context: ReactApplicationContext) :
     private const val ACTIVE_MBTILES_PATH_KEY = "active_mbtiles_path"
     private const val DEVICE_ID_KEY = "device_id"
     private const val DEMO_MBTILES_FILENAME = "demo_bangui.mbtiles"
+    private const val IMPORT_MBTILES_REQUEST_CODE = 4104
     private const val LAST_KNOWN_LOCATION_MAX_AGE_MS = 5 * 60 * 1_000L
     private const val LIVE_LOCATION_TIMEOUT_MS = 12_000L
   }

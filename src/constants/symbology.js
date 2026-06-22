@@ -34,6 +34,7 @@ export const TEARDROP_PIN = {
  * MapLibre RN SymbolLayer equivalent of the Leaflet anchor spec.
  * icon-anchor "bottom" on a 30×40 image places the tip at the coordinate.
  */
+/** @type {{ iconAnchor: 'bottom', iconOffset: [number, number], iconSize: number }} */
 export const MAPLIBRE_TEARDROP_ANCHOR = {
   iconAnchor: 'bottom',
   iconOffset: [0, 0],

@@ -1,4 +1,5 @@
 import type {MapPin} from './wayfinder';
+import {pinImageId} from '../constants/symbology';
 
 export type LngLat = [number, number];
 
@@ -29,7 +30,7 @@ export function pinsFeatureCollection(pins: MapPin[]) {
         category: pin.category,
         status_key: pin.status_key,
         label: pin.label,
-        icon: `pin-${pin.category}-${pin.status_key}`,
+        icon: pinImageId(pin.category, pin.status_key),
       },
     })),
   };

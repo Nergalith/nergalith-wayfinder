@@ -9,7 +9,7 @@ import {
 } from '@maplibre/maplibre-react-native';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Alert, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
-import {OWN_POSITION} from '../constants/symbology';
+import {MAPLIBRE_TEARDROP_ANCHOR, OWN_POSITION} from '../constants/symbology';
 import {PIN_IMAGE_MANIFEST} from '../constants/pinImages';
 import {useMovementTrack} from '../hooks/useMovementTrack';
 import {t} from '../i18n/strings';
@@ -387,7 +387,9 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
             source="pins"
             layout={{
               'icon-image': ['get', 'icon'],
-              'icon-anchor': 'bottom',
+              'icon-anchor': MAPLIBRE_TEARDROP_ANCHOR.iconAnchor,
+              'icon-offset': MAPLIBRE_TEARDROP_ANCHOR.iconOffset,
+              'icon-size': MAPLIBRE_TEARDROP_ANCHOR.iconSize,
               'icon-allow-overlap': true,
               'icon-ignore-placement': true,
             }}

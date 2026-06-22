@@ -46,6 +46,7 @@ export default function SettingsScreen({
   const [appVersion, setAppVersion] = useState('');
   const [sideloadPath, setSideloadPath] = useState('');
   const [changingPin, setChangingPin] = useState(false);
+  const [removingPin, setRemovingPin] = useState(false);
   const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmNewPin, setConfirmNewPin] = useState('');
@@ -96,6 +97,16 @@ export default function SettingsScreen({
     }
   }
 
+  async function handleImportPackage() {
+    try {
+      const imported = await Wayfinder.importMbtilesPackage();
+      await onTilePackageChange(imported.path);
+      Alert.alert(t(language, 'tilesImportSuccess'), imported.name);
+    } catch (error) {
+      Alert.alert(t(language, 'tilesImportPackage'), messageFrom(error));
+    }
+  }
+
   async function handleSavePinChange() {
     if (currentPin.length !== 4 || newPin.length !== 4 || confirmNewPin.length !== 4) {
       setPinError(t(language, 'pinInvalid'));
@@ -125,27 +136,30 @@ export default function SettingsScreen({
     }
   }
 
-  function handleRemovePin() {
-    Alert.alert(t(language, 'removePinConfirm'), t(language, 'removePinConfirmBody'), [
-      {text: t(language, 'cancel'), style: 'cancel'},
-      {
-        text: t(language, 'removePin'),
-        style: 'destructive',
-        onPress: () => {
-          Wayfinder.clearPin()
-            .then(() => {
-              onPinConfiguredChange(false);
-              setChangingPin(false);
-              setCurrentPin('');
-              setNewPin('');
-              setConfirmNewPin('');
-              setPinError('');
-              Alert.alert(t(language, 'securityLabel'), t(language, 'pinRemoved'));
-            })
-            .catch(error => Alert.alert(t(language, 'securityLabel'), messageFrom(error)));
-        },
-      },
-    ]);
+  async function handleRemovePin() {
+    if (currentPin.length !== 4) {
+      setPinError(t(language, 'pinInvalid'));
+      return;
+    }
+
+    try {
+      const ok = await Wayfinder.verifyPin(currentPin);
+      if (!ok) {
+        setPinError(t(language, 'pinWrong'));
+        return;
+      }
+      await Wayfinder.clearPin();
+      onPinConfiguredChange(false);
+      setChangingPin(false);
+      setRemovingPin(false);
+      setCurrentPin('');
+      setNewPin('');
+      setConfirmNewPin('');
+      setPinError('');
+      Alert.alert(t(language, 'securityLabel'), t(language, 'pinRemoved'));
+    } catch (error) {
+      setPinError(messageFrom(error));
+    }
   }
 
   return (
@@ -202,6 +216,9 @@ export default function SettingsScreen({
       <Text style={styles.groupLabel}>{t(language, 'mapLabel')}</Text>
       <View style={styles.card}>
         <Text style={styles.infoText}>{t(language, 'tilesSideloadHint')}</Text>
+        <TouchableOpacity style={styles.secondaryButton} onPress={handleImportPackage} activeOpacity={0.86}>
+          <Text style={styles.secondaryButtonText}>{t(language, 'tilesImportPackage')}</Text>
+        </TouchableOpacity>
         {sideloadPath ? (
           <Text style={styles.path}>
             {t(language, 'tilesSideloadFolder')}: {sideloadPath}
@@ -258,7 +275,9 @@ export default function SettingsScreen({
                 style={styles.secondaryButton}
                 onPress={() => {
                   setChangingPin(true);
+                  setRemovingPin(false);
                   setPinError('');
+                  setCurrentPin('');
                 }}
                 activeOpacity={0.86}>
                 <Text style={styles.secondaryButtonText}>{t(language, 'changePin')}</Text>
@@ -302,6 +321,7 @@ export default function SettingsScreen({
                     style={styles.secondaryButton}
                     onPress={() => {
                       setChangingPin(false);
+                      setRemovingPin(false);
                       setCurrentPin('');
                       setNewPin('');
                       setConfirmNewPin('');
@@ -319,9 +339,51 @@ export default function SettingsScreen({
                 </View>
               </View>
             )}
-            <TouchableOpacity style={styles.dangerButton} onPress={handleRemovePin} activeOpacity={0.86}>
-              <Text style={styles.dangerButtonText}>{t(language, 'removePin')}</Text>
-            </TouchableOpacity>
+            {!removingPin ? (
+              <TouchableOpacity
+                style={styles.dangerButton}
+                onPress={() => {
+                  setRemovingPin(true);
+                  setChangingPin(false);
+                  setCurrentPin('');
+                  setNewPin('');
+                  setConfirmNewPin('');
+                  setPinError('');
+                }}
+                activeOpacity={0.86}>
+                <Text style={styles.dangerButtonText}>{t(language, 'removePin')}</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.pinForm}>
+                <Text style={styles.inlineLabel}>{t(language, 'removePinTitle')}</Text>
+                <TextInput
+                  style={styles.pinInput}
+                  value={currentPin}
+                  onChangeText={value => setCurrentPin(digitsOnly(value))}
+                  keyboardType="number-pad"
+                  secureTextEntry
+                  maxLength={4}
+                  placeholder={t(language, 'currentPin')}
+                  placeholderTextColor={dark ? '#87919b' : '#68737d'}
+                />
+                {pinError ? <Text style={styles.pinError}>{pinError}</Text> : null}
+                <View style={styles.pinActions}>
+                  <TouchableOpacity
+                    style={styles.secondaryButton}
+                    onPress={() => {
+                      setRemovingPin(false);
+                      setCurrentPin('');
+                      setPinError('');
+                    }}
+                    activeOpacity={0.86}>
+                    <Text style={styles.secondaryButtonText}>{t(language, 'cancel')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.dangerButtonFlex} onPress={handleRemovePin} activeOpacity={0.86}>
+                    <Text style={styles.dangerButtonText}>{t(language, 'verifyAndRemovePin')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </>
         ) : null}
       </View>
@@ -448,6 +510,15 @@ function makeStyles(dark: boolean) {
     },
     primaryButtonText: {color: colors.accentText, fontSize: 16, fontWeight: '800', textAlign: 'center'},
     dangerButton: {
+      minHeight: 48,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.danger,
+      justifyContent: 'center',
+      paddingHorizontal: 14,
+    },
+    dangerButtonFlex: {
+      flex: 1,
       minHeight: 48,
       borderRadius: 8,
       borderWidth: 1,

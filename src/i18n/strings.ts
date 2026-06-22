@@ -29,6 +29,8 @@ type StringKey =
   | 'tilesSelectPackage'
   | 'tilesActiveBadge'
   | 'tilesSideloadFolder'
+  | 'tilesImportPackage'
+  | 'tilesImportSuccess'
   | 'pinManagement'
   | 'pinConfigured'
   | 'pinNotConfigured'
@@ -38,6 +40,8 @@ type StringKey =
   | 'newPin'
   | 'savePin'
   | 'removePin'
+  | 'removePinTitle'
+  | 'verifyAndRemovePin'
   | 'removePinConfirm'
   | 'removePinConfirmBody'
   | 'pinChanged'
@@ -84,7 +88,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
   fr: {
     appTitle: 'Nergalith Wayfinder',
     appSubtitle: 'Positionnement et navigation',
-    versionLabel: 'Wayfinder v0.4.0',
+    versionLabel: 'Wayfinder v0.4.1',
     pinCreateTitle: 'Créer un code PIN à 4 chiffres',
     pinUnlockTitle: 'Entrez le code PIN',
     pinPlaceholder: 'PIN',
@@ -105,11 +109,13 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     languageEn: 'Anglais',
     tilesLabel: 'Paquet de tuiles MBTiles',
     tilesDemoLoaded: 'Tuiles de démo Bangui (CAR) chargées pour les tests.',
-    tilesSideloadHint: 'Pour un déploiement réel, copiez un fichier .mbtiles dans le dossier ci-dessous, puis sélectionnez-le.',
+    tilesSideloadHint: 'Importer un fichier .mbtiles depuis le stockage de l\'appareil, puis sélectionner le paquet actif.',
     tilesActivePath: 'Fichier actif',
     tilesSelectPackage: 'Sélectionner le paquet actif',
     tilesActiveBadge: 'Actif',
     tilesSideloadFolder: 'Dossier de chargement manuel',
+    tilesImportPackage: 'Importer un paquet MBTiles',
+    tilesImportSuccess: 'Paquet MBTiles importé',
     pinManagement: 'Gestion du PIN',
     pinConfigured: 'PIN configuré sur cet appareil.',
     pinNotConfigured: 'Aucun PIN configuré.',
@@ -119,6 +125,8 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     newPin: 'Nouveau PIN',
     savePin: 'Enregistrer le PIN',
     removePin: 'Supprimer le PIN',
+    removePinTitle: 'Entrer le PIN actuel pour supprimer le verrouillage',
+    verifyAndRemovePin: 'Vérifier et supprimer',
     removePinConfirm: 'Supprimer le PIN ?',
     removePinConfirmBody: 'L\'application ne demandera plus de code PIN au démarrage.',
     pinChanged: 'Code PIN mis à jour.',
@@ -164,7 +172,7 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
   en: {
     appTitle: 'Nergalith Wayfinder',
     appSubtitle: 'Positioning and navigation',
-    versionLabel: 'Wayfinder v0.4.0',
+    versionLabel: 'Wayfinder v0.4.1',
     pinCreateTitle: 'Create a 4-digit PIN',
     pinUnlockTitle: 'Enter PIN to unlock',
     pinPlaceholder: 'PIN',
@@ -185,11 +193,13 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     languageEn: 'English',
     tilesLabel: 'MBTiles package',
     tilesDemoLoaded: 'Demo Bangui (CAR) tiles loaded for testing.',
-    tilesSideloadHint: 'For real deployment, copy a .mbtiles file into the folder below, then select it.',
+    tilesSideloadHint: 'Import a .mbtiles file from device storage, then select the active package.',
     tilesActivePath: 'Active file',
     tilesSelectPackage: 'Select active package',
     tilesActiveBadge: 'Active',
     tilesSideloadFolder: 'Sideload folder',
+    tilesImportPackage: 'Import MBTiles package',
+    tilesImportSuccess: 'MBTiles package imported',
     pinManagement: 'PIN management',
     pinConfigured: 'PIN is configured on this device.',
     pinNotConfigured: 'No PIN configured.',
@@ -199,6 +209,8 @@ const STRINGS: Record<LanguageCode, Record<StringKey, string>> = {
     newPin: 'New PIN',
     savePin: 'Save PIN',
     removePin: 'Remove PIN',
+    removePinTitle: 'Enter the current PIN to remove the lock',
+    verifyAndRemovePin: 'Verify and remove',
     removePinConfirm: 'Remove PIN?',
     removePinConfirmBody: 'The app will no longer ask for a PIN on launch.',
     pinChanged: 'PIN updated.',
