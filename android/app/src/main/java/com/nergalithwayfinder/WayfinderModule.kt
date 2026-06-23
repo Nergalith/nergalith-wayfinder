@@ -1233,7 +1233,7 @@ class WayfinderModule(private val context: ReactApplicationContext) :
   }
 
   companion object {
-    private const val APP_VERSION = "0.4.6"
+    private const val APP_VERSION = "0.4.7"
     private const val SCHEMA_VERSION = 1
     private const val SYMBOLOGY_VERSION = "1.0"
     private const val ACTIVE_ROUTE_ID = "active"

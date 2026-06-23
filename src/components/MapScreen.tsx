@@ -118,6 +118,10 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
   }, [activeTilePath, language]);
 
   useEffect(() => {
+    hasAutoCenteredRef.current = false;
+  }, [activeTilePath]);
+
+  useEffect(() => {
     let cancelled = false;
     let interval: ReturnType<typeof setInterval> | undefined;
 
@@ -159,11 +163,11 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
   }, [language]);
 
   const initialCenter = useMemo<[number, number]>(() => {
-    if (position) {
-      return [position.longitude, position.latitude];
-    }
     if (tileMeta?.centerLng != null && tileMeta.centerLat != null) {
       return [tileMeta.centerLng, tileMeta.centerLat];
+    }
+    if (position) {
+      return [position.longitude, position.latitude];
     }
     return [18.5582, 4.3947];
   }, [position, tileMeta]);
@@ -171,7 +175,23 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
   const initialZoom = tileMeta?.centerZoom ?? 12;
 
   useEffect(() => {
-    if (!position || !cameraRef.current || hasAutoCenteredRef.current) {
+    if (!tileMeta || tileMeta.centerLng == null || tileMeta.centerLat == null || !cameraRef.current) {
+      return;
+    }
+    cameraRef.current.easeTo({
+      center: [tileMeta.centerLng, tileMeta.centerLat],
+      zoom: tileMeta.centerZoom ?? 12,
+      duration: 0,
+    });
+  }, [tileMeta]);
+
+  useEffect(() => {
+    if (
+      !position ||
+      !cameraRef.current ||
+      hasAutoCenteredRef.current ||
+      !positionWithinTileBounds(position, tileMeta)
+    ) {
       return;
     }
     hasAutoCenteredRef.current = true;
@@ -180,7 +200,7 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
       zoom: initialZoom,
       duration: 0,
     });
-  }, [position, initialZoom]);
+  }, [position, initialZoom, tileMeta]);
 
   function recenterOnOwnPosition() {
     if (!position || !cameraRef.current) {
@@ -450,6 +470,20 @@ export default function MapScreen({dark, language, activeTilePath, onOpenSetting
         onSave={saveDroppedPin}
       />
     </View>
+  );
+}
+
+function positionWithinTileBounds(position: GpsPosition, tileMeta: MbtilesMetadata | null): boolean {
+  const bounds = tileMeta?.bounds;
+  if (!bounds || bounds.length !== 4) {
+    return true;
+  }
+  const [west, south, east, north] = bounds;
+  return (
+    position.longitude >= west &&
+    position.longitude <= east &&
+    position.latitude >= south &&
+    position.latitude <= north
   );
 }
 
